@@ -1,6 +1,6 @@
 ---
-name: wens-implement-plan
-description: "Use when executing a plan produced by wens-create-plan (or any plan with independent tasks) and you want every implementation + two-stage review subtask dispatched via agd to keep main-session context lean. Use whenever the user says 'wens implement', 'wens-implement-plan', or pastes the handoff prompt emitted by wens-create-plan. Review-feedback application stays in the main session."
+name: wens-plan-implementer
+description: "Use when executing a plan produced by wens-plan-creator (or any plan with independent tasks) and you want every implementation + two-stage review subtask dispatched via agd to keep main-session context lean. Use whenever the user says 'wens implement', 'wens-plan-implementer', or pastes the handoff prompt emitted by wens-plan-creator. Review-feedback application stays in the main session."
 allowed-tools: Bash, Read, Write, Edit, Skill
 ---
 
@@ -65,7 +65,7 @@ digraph wens_impl {
 ### Implement a task
 
 ```bash
-sh skills/wens-implement-plan/scripts/dispatch.sh \
+sh skills/wens-plan-implementer/scripts/dispatch.sh \
     --template code-implement \
     --var repo_root="$(git rev-parse --show-toplevel)" \
     --var spec_path=<spec> \
@@ -80,7 +80,7 @@ sh skills/wens-implement-plan/scripts/dispatch.sh \
 ### Spec-compliance review (stage 1)
 
 ```bash
-sh skills/wens-implement-plan/scripts/dispatch.sh \
+sh skills/wens-plan-implementer/scripts/dispatch.sh \
     --template code-review \
     --var repo_root="$(git rev-parse --show-toplevel)" \
     --var diff_scope="HEAD~1..HEAD" \
@@ -94,7 +94,7 @@ sh skills/wens-implement-plan/scripts/dispatch.sh \
 ### Code-quality review (stage 2, only after stage 1 PASSes)
 
 ```bash
-sh skills/wens-implement-plan/scripts/dispatch.sh \
+sh skills/wens-plan-implementer/scripts/dispatch.sh \
     --template code-review \
     --var repo_root="$(git rev-parse --show-toplevel)" \
     --var diff_scope="HEAD~1..HEAD" \
@@ -110,7 +110,7 @@ Omit `spec_path` for stage 2 to keep the reviewer focused on quality.
 
 ```bash
 BASE=$(git merge-base HEAD main)
-sh skills/wens-implement-plan/scripts/dispatch.sh \
+sh skills/wens-plan-implementer/scripts/dispatch.sh \
     --template code-review \
     --var repo_root="$(git rev-parse --show-toplevel)" \
     --var diff_scope="${BASE}..HEAD" \

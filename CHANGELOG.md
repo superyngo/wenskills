@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 2026-05-25 — feat(skills): add wens-create-plan and wens-implement-plan
+### 2026-05-25 — feat(skills): add wens-plan-creator and wens-plan-implementer
 
-- `skills/wens-create-plan/`: New skill orchestrating brainstorming → spec self-review (paired with grill-with-docs) → external agd spec-review loop → writing-plans + feature-planning → handoff prompt for next session. Embeds own copy of `dispatch.sh` + templates so runtime does not need to load `agd-dispatch`.
-- `skills/wens-implement-plan/`: New skill that runs `subagent-driven-development`'s loop with every implement / two-stage review subtask dispatched via embedded `agd-dispatch` script; review-feedback fixes stay in main session. Embeds own copy of `dispatch.sh` + templates.
+- `skills/wens-plan-creator/`: New skill orchestrating brainstorming → spec self-review (paired with grill-with-docs) → external agd spec-review loop (until zero blockers) → writing-plans + feature-planning → handoff prompt for next session. Embeds own copy of `dispatch.sh` + templates so runtime does not need to load `agd-dispatch`.
+- `skills/wens-plan-implementer/`: New skill that runs `subagent-driven-development`'s loop with every implement / two-stage review subtask dispatched via embedded `agd-dispatch` script; review-feedback fixes stay in main session. Embeds own copy of `dispatch.sh` + templates.
 
 ### 2026-05-10 — test(rust): add insta snapshot tests and implement golden fixtures
 

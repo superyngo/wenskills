@@ -1,12 +1,12 @@
 ---
-name: wens-create-plan
-description: "Use when starting a new feature/project and you want Wen's full plan-creation flow — brainstorm → spec → external review loop → implementation plan — with spec review offloaded via agd to save main-session context. Use whenever the user says 'wens create plan', 'wens plan', 'start a wens plan flow', or asks for a planning workflow that ends with a paste-ready handoff prompt for the implement skill."
+name: wens-plan-creator
+description: "Use when starting a new feature/project and you want Wen's full plan-creation flow — brainstorm → spec → external review loop → implementation plan — with spec review offloaded via agd to save main-session context. Use whenever the user says 'wens-plan-creator', 'wens create plan', 'wens plan', 'start a wens plan flow', or asks for a planning workflow that ends with a paste-ready handoff prompt for the implement skill."
 allowed-tools: Bash, Read, Write, Edit, Skill
 ---
 
 # Wen's Create-Plan Flow
 
-End-to-end planning workflow that produces a reviewed spec **and** an implementation plan, ending with a paste-ready prompt the user can drop into a fresh session to start `wens-implement-plan`.
+End-to-end planning workflow that produces a reviewed spec **and** an implementation plan, ending with a paste-ready prompt the user can drop into a fresh session to start `wens-plan-implementer`.
 
 External spec review runs via `agd` (this skill embeds its own copy of `dispatch.sh` + templates — no need to load `agd-dispatch`).
 
@@ -22,7 +22,7 @@ All referenced skills are installed. Don't validate them.
 ```
 1. brainstorming                       (interactive)
 2. Spec Self-Review + grill-with-docs  (forced pairing inside step 1's review gate)
-3. Loop: dispatch spec-review via agd  (until status: PASS)
+3. Loop: dispatch spec-review via agd  (until zero blockers)
 4. writing-plans + feature-planning    (produce plan doc)
 5. Emit handoff prompt                 (user pastes into next session)
 ```
@@ -39,10 +39,10 @@ Order: brainstorming's self-review scan first (placeholders, internal consistenc
 
 ### Step 3 — External Review Loop via `agd`
 
-Loop the spec through external review until it returns `status: PASS` (zero blockers, zero majors). Each round:
+Loop the spec through external review until zero blockers remain. Each round:
 
 ```bash
-sh skills/wens-create-plan/scripts/dispatch.sh \
+sh skills/wens-plan-creator/scripts/dispatch.sh \
     --template spec-review \
     --var spec_path=<path-to-spec> \
     --var stage="round <N>" \
@@ -71,7 +71,7 @@ Print a prompt block the user can copy-paste into a new session to start impleme
 
 ```
 === PASTE INTO NEW SESSION ===
-/wens-implement-plan
+/wens-plan-implementer
 
 Spec: <absolute path to spec>
 Plan: <absolute path to plan>
@@ -83,7 +83,7 @@ Notes (optional):
 ==============================
 ```
 
-End your turn after printing this block. Do **not** auto-invoke `wens-implement-plan` — the handoff is intentional context reset.
+End your turn after printing this block. Do **not** auto-invoke `wens-plan-implementer` — the handoff is intentional context reset.
 
 ## Dispatch Template Reference
 
@@ -103,6 +103,6 @@ Default timeout 900s; override with `--timeout <sec>` if the spec is large.
 
 - Skipping the brainstorming flow because "the user already described it" — run it anyway; the gates catch hidden assumptions.
 - Skipping `grill-with-docs` at the self-review gate because the spec "looks clean" — pair is mandatory.
-- Treating `status: ISSUES_FOUND` with only `minor` items as a blocker — minors are advisory; exit the loop.
-- Auto-invoking `wens-implement-plan` at the end. The handoff prompt is the deliverable; the user starts the next session.
+- Treating `status: ISSUES_FOUND` with only `major`/`minor` items as a reason to keep looping — only blockers gate the loop; majors/minors are advisory.
+- Auto-invoking `wens-plan-implementer` at the end. The handoff prompt is the deliverable; the user starts the next session.
 - Forgetting to commit between rounds — reviewer needs the latest spec on disk.
