@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-05-26 — feat(skills): add ui-design-principles
+
+- `skills/ui-design-principles/`: New reference skill capturing high-level, implementation-agnostic UI conventions (TUI-first). 12 principles: shared interface for identical operations; Home/End/arrow keys in text fields; PgUp/PgDn for multi-line input; keyboard navigation for all scrollable elements; sticky-cursor list scrolling; top-right version display; resize-aware layout; consistent global keys + key-hint footer; destructive-action confirmation + state preservation; graceful degradation (NO_COLOR/ASCII/color semantics); UI-safe logging (no stdout/stderr pollution); upfront i18n planning.
+- `skills/ui-design-principles/references/scrollable-list-viewport.md`: Full sticky-cursor scrolling spec for principle 5 — separated `selected_index`/`scroll_offset` state, minimal-scroll rules, edge cases, and required test scenarios.
+
 ### 2026-05-25 — feat(skills): add wens-plan-creator and wens-plan-implementer
 
 - `skills/wens-plan-creator/`: New skill orchestrating brainstorming → spec self-review (paired with grill-with-docs) → external agd spec-review loop (until zero blockers) → writing-plans + feature-planning → handoff prompt for next session. Embeds own copy of `dispatch.sh` + templates so runtime does not need to load `agd-dispatch`.

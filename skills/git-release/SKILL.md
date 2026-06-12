@@ -5,163 +5,127 @@ argument-hint: [version]
 allowed-tools: Read, Write, Edit, Bash, Grep, AskUserQuestion, mcp__github__create_pull_request, mcp__github__list_tags, mcp__github__get_latest_release
 ---
 
-# 推送更新流程
+# Git Release Workflow
 
-執行推送更新到遠端的完整流程。
+Complete workflow for pushing updates to remote and optionally releasing a new version.
 
 ---
 
-## 步驟 1：確認與遠端同步無衝突
+## Step 1: Confirm Sync with Remote
 
-在進行任何操作前，先確保本地與遠端同步。
+Before any operation, ensure local is in sync with remote.
 
-### 1.1 獲取遠端最新資訊
+### 1.1 Check current branch
+
+```bash
+BRANCH=$(git branch --show-current)
+```
+
+If `$BRANCH` is not `main`, warn the user and ask whether to continue on this branch:
+- Show the current branch name
+- Explain that releasing from a non-main branch may not trigger CI/CD or may target the wrong ref
+- Options: **Continue on this branch** / **Switch to main first** / **Cancel**
+
+### 1.2 Fetch latest remote info
 
 ```bash
 git fetch origin
 ```
 
-### 1.2 檢查同步狀態
+### 1.3 Check sync status
 
 ```bash
 git status
 ```
 
-檢查以下情況：
-- 「Your branch is behind」→ 本地落後
-- 「Your branch has diverged」→ 分支分歧
-- 「Your branch is ahead」→ 可以推送
+Check for:
+- "Your branch is behind" → local is behind
+- "Your branch has diverged" → branches diverged
+- "Your branch is ahead" → ready to push
 
-### 1.3 如果有差異，顯示詳情
+### 1.4 If there are differences, show details
 
-**顯示遠端領先的提交：**
+**Show commits ahead on remote:**
+
 ```bash
-git log --oneline HEAD..origin/main
+git log --oneline HEAD..origin/$BRANCH
 ```
 
-**顯示變更統計：**
+**Show change stats:**
+
 ```bash
-git diff HEAD...origin/main --stat
+git diff HEAD...origin/$BRANCH --stat
 ```
 
-**如需要，顯示詳細差異：**
+**If needed, show full diff:**
+
 ```bash
-git diff HEAD...origin/main
+git diff HEAD...origin/$BRANCH
 ```
 
-### 1.4 讓用戶決定處理方式
+### 1.5 Let user choose resolution
 
-詢問用戶：
-- **Rebase（推薦）**：`git pull --rebase origin main`
-- **Merge**：`git pull origin main`
-- **取消流程**
+Ask the user:
+- **Rebase (recommended)**: `git pull --rebase origin $BRANCH`
+- **Merge**: `git pull origin $BRANCH`
+- **Cancel workflow**
 
-如果同步過程中有衝突，停止流程並顯示衝突訊息。
+If sync produces conflicts, stop and show conflict messages.
 
 ---
 
-## 步驟 2：執行代碼品質審查
+## Step 2: Code Quality Checks
 
-**重點**：在提交之前執行，確保只提交高品質代碼。
+**Important**: Run before committing to ensure only high-quality code is submitted.
 
-### 2.1 自動檢測專案類型
+### 2.1 Auto-detect project type
 
-按以下順序檢測：
+Check in order:
 
-| 檔案 | 專案類型 |
-|------|----------|
+| File | Project Type |
+|------|-------------|
 | `Cargo.toml` | Rust |
 | `package.json` | Node.js |
-| `pyproject.toml` 或 `setup.py` | Python |
+| `pyproject.toml` or `setup.py` | Python |
 | `go.mod` | Go |
 
-### 2.2 Rust 專案檢查
+### 2.2 Run quality checks
 
-```bash
-# 1. 格式化（自動修復）
-cargo fmt
+Based on the detected project type, run the appropriate:
 
-# 2. Clippy 檢查
-cargo clippy -- -D warnings
-# 如有問題，嘗試：cargo clippy --fix --allow-dirty
+1. **Format** — auto-fix code formatting
+2. **Lint** — check for code quality issues, auto-fix where possible
+3. **Type check** — verify type correctness (if applicable)
+4. **Test** — run all tests and ensure they pass
 
-# 3. 編譯檢查
-cargo check
+All checks must pass. If any check fails and cannot be auto-fixed, ask the user whether to continue.
 
-# 4. 測試
-cargo test
-```
+Any auto-fixed changes will be included in the Step 3 commit.
 
-### 2.3 Node.js 專案檢查
+### 2.3 Check result handling
 
-```bash
-# 1. 格式化（如有 prettier）
-npx prettier --write . 2>/dev/null || true
-
-# 2. ESLint 檢查（自動修復）
-npx eslint --fix . 2>/dev/null || true
-
-# 3. 類型檢查（如有 TypeScript）
-npx tsc --noEmit 2>/dev/null || true
-
-# 4. 測試
-npm test 2>/dev/null || true
-```
-
-### 2.4 Python 專案檢查
-
-```bash
-# 1. 格式化
-black . 2>/dev/null || true
-isort . 2>/dev/null || true
-
-# 2. Linting（優先使用 ruff）
-ruff check --fix . 2>/dev/null || flake8 . 2>/dev/null || true
-
-# 3. 類型檢查（如有設定）
-mypy . 2>/dev/null || true
-
-# 4. 測試
-pytest 2>/dev/null || true
-```
-
-### 2.5 Go 專案檢查
-
-```bash
-# 1. 格式化
-gofmt -w .
-
-# 2. Linting
-golangci-lint run 2>/dev/null || true
-
-# 3. 測試
-go test ./...
-```
-
-### 2.6 檢查結果處理
-
-- 所有檢查通過：顯示「✓ 代碼品質檢查通過」
-- 如有自動修復的更改，這些更改會在步驟 3 一併提交
-- 如有無法自動修復的錯誤，詢問用戶是否繼續
+- All checks pass: show "✓ Code quality checks passed"
+- Auto-fixed changes: these changes will be committed together in Step 3
+- Unfixable errors: ask user whether to continue
 
 ---
 
-## 步驟 3：提交所有更新
+## Step 3: Commit All Changes
 
-### 3.1 顯示所有變更
+### 3.1 Show all changes
 
 ```bash
 git status
 git diff --stat
 ```
 
-### 3.2 讓用戶確認
+### 3.2 Let user confirm
 
-- 顯示變更摘要
-- 建議 commit message（根據變更內容）
-- 讓用戶確認或修改 commit message
+- Show change summary
+- Suggest commit message (based on change content)
+- Let user confirm or modify the commit message
 
-### 3.3 執行提交
+### 3.3 Execute commit
 
 ```bash
 git add -A
@@ -170,122 +134,120 @@ git commit -m "<message>"
 
 ---
 
-## 步驟 4：詢問用戶是否發佈新版
+## Step 4: Ask User Whether to Release a New Version
 
-### 4.1 分析提交歷史
+### 4.1 Analyze commit history
 
 ```bash
-# 獲取最新的 tag
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-# 如果有上次 tag，顯示自那之後的提交
 if [ -n "$LAST_TAG" ]; then
   git log $LAST_TAG..HEAD --pretty=format:"%s"
 else
-  # 沒有 tag，顯示所有提交
-  git log --pretty=format:"%s"
+  git log --pretty=format:"%s" --max-count=20
 fi
 ```
 
-### 4.2 根據 Conventional Commits 建議版號
+### 4.2 Suggest version bump based on Conventional Commits
 
-分析提交訊息：
-- 包含 `BREAKING CHANGE` 或 `!:` → **major** 升級 (X.0.0)
-- 包含 `feat:` → **minor** 升級 (x.Y.0)
-- 僅包含 `fix:`, `chore:`, `docs:`, `refactor:` 等 → **patch** 升級 (x.y.Z)
+Analyze commit messages:
+- Contains `BREAKING CHANGE` or `!:` → **major** bump (X.0.0)
+- Contains `feat:` → **minor** bump (x.Y.0)
+- Only `fix:`, `chore:`, `docs:`, `refactor:`, etc. → **patch** bump (x.y.Z)
 
-### 4.3 顯示建議
-
-```
-上次版本：v1.2.3
-變更摘要：
-- 3 個新功能 (feat)
-- 2 個修復 (fix)
-- 1 個文件更新 (docs)
-
-建議新版本：v1.3.0 (minor 升級，因為有新功能)
-```
-
-### 4.4 讓用戶選擇
-
-詢問用戶：
+### 4.3 Show suggestion
 
 ```
-是否要發佈新版本？
-[1] 是，使用建議版本 v1.3.0
-[2] 是，自訂版本號
-[3] 否，只推送不發版
+Last version: v1.2.3
+Change summary:
+- 3 new features (feat)
+- 2 fixes (fix)
+- 1 doc update (docs)
+
+Suggested new version: v1.3.0 (minor bump due to new features)
 ```
 
-如果用戶選擇 [3]（不發版）：
-- 直接推送到遠端
-- 流程結束
+### 4.4 Let user choose
+
+Ask the user:
+
+```
+Would you like to release a new version?
+[1] Yes, use suggested version v1.3.0
+[2] Yes, use a custom version
+[3] No, just push without release
+```
+
+If user chooses [3] (no release):
+- Push to remote directly
+- Workflow ends
 
 ---
 
-## 步驟 5：版本發布流程
+## Step 5: Version Release Process
 
-如果用戶選擇發布新版本，依序執行：
+If the user chooses to release a new version, execute in order:
 
-### 5.1 統一版號格式
+### 5.1 Normalize version format
 
-- 支援輸入 `v1.2.3` 或 `1.2.3`
-- 內部統一使用帶 `v` 前綴格式
+- Accept input as `v1.2.3` or `1.2.3`
+- Internally use `v` prefix format consistently
 
-### 5.2 更新專案設定檔版號
+### 5.2 Update project config version
 
-根據檢測到的專案類型：
+Based on detected project type:
 
-**Rust (Cargo.toml)**：
+**Rust (`Cargo.toml`)**:
 ```toml
-version = "x.y.z"  # 不帶 v 前綴
+version = "x.y.z"  # without v prefix
 ```
 
-**Node.js (package.json)**：
+**Node.js (`package.json`)**:
 ```json
-"version": "x.y.z"  // 不帶 v 前綴
+"version": "x.y.z"  // without v prefix
 ```
 
-**Python (pyproject.toml)**：
+**Python (`pyproject.toml`)**:
 ```toml
-version = "x.y.z"  # 不帶 v 前綴
+version = "x.y.z"  # without v prefix
 ```
 
-### 5.3 整理 CHANGELOG.md
+### 5.3 Update CHANGELOG.md
 
-將 `## [Unreleased]` 區塊轉為新版本區塊：
+If `CHANGELOG.md` exists, convert the `## [Unreleased]` section to a new version section.
+If it does not exist, create a new file with the version section.
 
 ```markdown
 ## [vX.Y.Z] - YYYY-MM-DD
 
 ### Added
-- 新功能列表（從 feat: 提取）
+- List of new features (extracted from feat: commits)
 
 ### Changed
-- 變更列表（從 refactor:, chore: 提取）
+- List of changes (extracted from refactor:, chore: commits)
 
 ### Fixed
-- 修復列表（從 fix: 提取）
+- List of fixes (extracted from fix: commits)
 
 ### Docs
-- 文件更新（從 docs: 提取）
+- Documentation updates (extracted from docs: commits)
 ```
 
-保留空的 `## [Unreleased]` 區塊供未來使用。
+Preserve an empty `## [Unreleased]` section for future use.
 
-### 5.4 更新 README.md
+### 5.4 Update README.md
 
-- 更新版本徽章（如有）
-- 更新版本號引用（如有）
+- Update version badge (if present)
+- Update version references (if present)
 
-### 5.5 提交文件更改
+### 5.5 Commit file changes
 
 ```bash
 git add -A
 git commit -m "chore: release vX.Y.Z"
 ```
 
-### 5.6 建立 Git Tag
+### 5.6 Create Git Tag
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z
@@ -293,158 +255,155 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z
 <release notes content>"
 ```
 
-### 5.7 推送到遠端
+### 5.7 Push to remote
 
 ```bash
-git push origin main
+git push origin $BRANCH
 git push origin --tags
 ```
 
-### 5.8 檢查遠端 Release Action
+### 5.8 Check for remote Release Action
 
-推送 tag 後，檢查專案是否有自動創建 Release 的 GitHub Actions：
+After pushing the tag, check if the project has a GitHub Actions workflow that auto-creates releases:
 
 ```bash
-# 檢查是否存在 release workflow
 if [ -f .github/workflows/release.yml ]; then
-  echo "✓ 偵測到遠端 release workflow，GitHub Actions 將自動創建 Release"
-  echo "→ 跳過本地創建 Release 步驟"
+  echo "✓ Remote release workflow detected, GitHub Actions will auto-create Release"
   SKIP_LOCAL_RELEASE=true
 else
-  echo "✓ 未偵測到自動 release workflow"
+  echo "✓ No auto release workflow detected"
   SKIP_LOCAL_RELEASE=false
 fi
 ```
 
-如果 `SKIP_LOCAL_RELEASE=true`：
-- 顯示訊息告知用戶 Release 將由 GitHub Actions 自動創建
-- 提供 Actions 頁面連結讓用戶追蹤進度：`https://github.com/<owner>/<repo>/actions`
-- 跳過步驟 5.9
+If `SKIP_LOCAL_RELEASE=true`:
+- Show message that Release will be auto-created by GitHub Actions
+- Provide Actions page link for tracking: `https://github.com/<owner>/<repo>/actions`
+- Skip Step 5.9
 
-如果 `SKIP_LOCAL_RELEASE=false`：
-- 繼續執行步驟 5.9 本地創建 Release
+If `SKIP_LOCAL_RELEASE=false`:
+- Continue to Step 5.9
 
-### 5.9 建立 GitHub Release（僅當無自動 workflow 時）
+### 5.9 Create GitHub Release (only when no auto workflow)
 
-**此步驟僅在專案沒有自動 release workflow 時執行。**
+**This step only executes when the project has no auto release workflow.**
 
-**工具優先順序**：
+**Tool priority:**
 
-1. **GitHub MCP Server**（優先）
-   - 使用 MCP 工具建立 Release
+1. **GitHub MCP Server** (preferred)
+   - Use MCP tool to create Release
 
-2. **gh CLI**（備選）
+2. **gh CLI** (fallback)
    ```bash
    gh release create vX.Y.Z \
      --title "Release vX.Y.Z" \
      --notes "<release notes>"
    ```
 
-3. **提示用戶手動創建**（最後選項）
+3. **Prompt user to create manually** (last resort)
    ```
-   請手動到 GitHub 建立 Release：
+   Please create the Release manually on GitHub:
    https://github.com/<owner>/<repo>/releases/new?tag=vX.Y.Z
    ```
 
-使用收集的 release notes 作為描述，標記為最新版本。
+Use the collected release notes as the description, mark as latest version.
 
-### 5.10 顯示結果
+### 5.10 Show results
 
-**如果有自動 release workflow：**
+**If auto release workflow exists:**
 ```
-✓ 專案設定檔版號已更新
-✓ CHANGELOG.md 已更新
-✓ README.md 已更新（如適用）
-✓ 已建立 tag vX.Y.Z
-✓ 已推送到遠端
+✓ Project config version updated
+✓ CHANGELOG.md updated
+✓ README.md updated (if applicable)
+✓ Tag vX.Y.Z created
+✓ Pushed to remote
 
-→ GitHub Actions 將自動創建 Release
-→ 追蹤進度：https://github.com/user/repo/actions
-→ 完成後查看：https://github.com/user/repo/releases/tag/vX.Y.Z
+→ GitHub Actions will auto-create Release
+→ Track progress: https://github.com/user/repo/actions
+→ View after completion: https://github.com/user/repo/releases/tag/vX.Y.Z
 ```
 
-**如果無自動 workflow（本地創建）：**
+**If no auto workflow (local creation):**
 ```
-✓ 專案設定檔版號已更新
-✓ CHANGELOG.md 已更新
-✓ README.md 已更新（如適用）
-✓ 已建立 tag vX.Y.Z
-✓ 已推送到遠端
-✓ 已建立 GitHub Release
+✓ Project config version updated
+✓ CHANGELOG.md updated
+✓ README.md updated (if applicable)
+✓ Tag vX.Y.Z created
+✓ Pushed to remote
+✓ GitHub Release created
 
-發布連結：https://github.com/user/repo/releases/tag/vX.Y.Z
+Release link: https://github.com/user/repo/releases/tag/vX.Y.Z
 ```
 
 ---
 
-## 錯誤處理
+## Error Handling
 
-- 如果 git 操作失敗，顯示錯誤訊息並停止流程
-- 如果沒有自動 release workflow 且 GitHub MCP 不可用，自動降級到 gh CLI
-- 如果 gh CLI 不可用，降級到提示用戶手動創建
-- 如果檔案更新失敗，詢問用戶是否繼續
+- If a git operation fails, show error message and stop the workflow
+- If no auto release workflow and GitHub MCP is unavailable, fall back to gh CLI
+- If gh CLI is unavailable, fall back to prompting user to create manually
+- If file update fails, ask user whether to continue
 
 ---
 
-## 使用範例
+## Usage Examples
 
 ```bash
-# 快速推送（自動檢查、提交、詢問是否發版）
+# Quick push (auto checks, commit, ask whether to release)
 /git-release
 
-# 直接指定版本號發布
+# Release with specific version
 /git-release v1.3.0
 
-# 發布補丁版本
+# Release a patch version
 /git-release v1.2.1
 ```
 
 ---
 
-## 補充說明
+## Notes
 
-### 版本號格式
+### Version Format
 
-建議使用語義化版本 (Semantic Versioning)：
-- **主版本號** (X.0.0)：不相容的 API 修改
-- **次版本號** (x.Y.0)：向下相容的功能性新增
-- **修訂號** (x.y.Z)：向下相容的問題修正
+Recommended to use Semantic Versioning:
+- **Major** (X.0.0): incompatible API changes
+- **Minor** (x.Y.0): backward-compatible new features
+- **Patch** (x.y.Z): backward-compatible bug fixes
 
-### Conventional Commits 類型對應
+### Conventional Commits Type Mapping
 
-| 類型 | 說明 | 版本影響 |
-|------|------|----------|
-| `feat:` | 新功能 | minor |
-| `fix:` | 修復 | patch |
-| `docs:` | 文件 | patch |
-| `style:` | 格式 | patch |
-| `refactor:` | 重構 | patch |
-| `perf:` | 效能 | patch |
-| `test:` | 測試 | patch |
-| `chore:` | 雜項 | patch |
-| `BREAKING CHANGE` | 破壞性更改 | major |
+| Type | Description | Version Impact |
+|------|-------------|----------------|
+| `feat:` | New feature | minor |
+| `fix:` | Bug fix | patch |
+| `docs:` | Documentation | patch |
+| `style:` | Formatting | patch |
+| `refactor:` | Refactoring | patch |
+| `perf:` | Performance | patch |
+| `test:` | Tests | patch |
+| `chore:` | Maintenance | patch |
+| `BREAKING CHANGE` | Breaking change | major |
 
-### 分支保護
+### Branch Protection
 
-如果 main 分支有保護規則，可能無法直接推送。
+If the main branch has protection rules, direct push may not be possible.
 
-### 權限要求
+### Permissions Required
 
-確保有推送權限和建立 Release 的權限。
+Ensure you have push permissions and Release creation permissions.
 
-### 自動 Release Workflow 檢測
+### Auto Release Workflow Detection
 
-- 推送 tag 後會自動檢查 `.github/workflows/release.yml` 是否存在
-- 如果存在，表示專案有自動創建 Release 的 GitHub Actions workflow
-- 此時會跳過本地創建 Release 的步驟，避免重複
-- 常見的自動 release workflow 觸發條件：
+- After pushing a tag, checks whether `.github/workflows/release.yml` exists
+- If it exists, the project has a GitHub Actions workflow for auto-creating Releases
+- In this case, the local Release creation step is skipped to avoid duplication
+- Common auto release workflow trigger:
   ```yaml
   on:
     push:
       tags:
         - "v*.*.*"
   ```
-- 如果您的專案使用不同的檔名（如 `ci.yml`、`build.yml`），可能需要手動調整檢測邏輯
+- If your project uses a different filename (e.g., `ci.yml`, `build.yml`), you may need to manually adjust the detection logic
 
 ---
-
