@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-06-23 — refactor(skills): condense git-release + branch handling
+
+- `skills/git-release/SKILL.md`: Moderately condensed prose to save tokens (kept all steps + bash). Added explicit uncommitted-change detection (ask → commit). Enhanced non-main branch handling: "Switch to main" now merges the feature branch into `main`, continues the release there, and a new Step 6 removes the merged local feature branch with `git branch -d` (safe; refuses if unmerged) after a successful release.
+
 ### 2026-05-26 — feat(skills): add ui-design-principles
 
 - `skills/ui-design-principles/`: New reference skill capturing high-level, implementation-agnostic UI conventions (TUI-first). 12 principles: shared interface for identical operations; Home/End/arrow keys in text fields; PgUp/PgDn for multi-line input; keyboard navigation for all scrollable elements; sticky-cursor list scrolling; top-right version display; resize-aware layout; consistent global keys + key-hint footer; destructive-action confirmation + state preservation; graceful degradation (NO_COLOR/ASCII/color semantics); UI-safe logging (no stdout/stderr pollution); upfront i18n planning.

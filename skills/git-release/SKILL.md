@@ -7,125 +7,83 @@ allowed-tools: Read, Write, Edit, Bash, Grep, AskUserQuestion, mcp__github__crea
 
 # Git Release Workflow
 
-Complete workflow for pushing updates to remote and optionally releasing a new version.
+Commit + push updates, optionally release a new version.
 
 ---
 
-## Step 1: Confirm Sync with Remote
+## Step 1: Branch & Sync
 
-Before any operation, ensure local is in sync with remote.
-
-### 1.1 Check current branch
+### 1.1 Branch check
 
 ```bash
 BRANCH=$(git branch --show-current)
 ```
 
-If `$BRANCH` is not `main`, warn the user and ask whether to continue on this branch:
-- Show the current branch name
-- Explain that releasing from a non-main branch may not trigger CI/CD or may target the wrong ref
-- Options: **Continue on this branch** / **Switch to main first** / **Cancel**
+If `$BRANCH` ≠ `main`, warn and ask (releasing off-main may miss CI/CD or target the wrong ref):
 
-### 1.2 Fetch latest remote info
+- **Continue on this branch** — release stays on `$BRANCH`.
+- **Switch to main** — merge `$BRANCH` into `main`, continue the release on `main`. Record `FEAT_BRANCH=$BRANCH` so it can be removed in Step 6.
+  ```bash
+  FEAT_BRANCH=$BRANCH
+  git checkout main && git merge --no-ff "$FEAT_BRANCH"
+  BRANCH=main
+  ```
+  On merge conflict: stop, show conflicts.
+- **Cancel**.
+
+### 1.2 Detect uncommitted changes
+
+```bash
+git status --porcelain
+```
+
+If non-empty, ask the user whether to commit now. If yes, follow Step 3; else stop (a release needs a clean tree).
+
+### 1.3 Sync with remote
 
 ```bash
 git fetch origin
-```
-
-### 1.3 Check sync status
-
-```bash
 git status
 ```
 
-Check for:
-- "Your branch is behind" → local is behind
-- "Your branch has diverged" → branches diverged
-- "Your branch is ahead" → ready to push
-
-### 1.4 If there are differences, show details
-
-**Show commits ahead on remote:**
+Behind / diverged / ahead → act accordingly. If differences exist, show them:
 
 ```bash
-git log --oneline HEAD..origin/$BRANCH
+git log --oneline HEAD..origin/$BRANCH      # remote-ahead commits
+git diff HEAD...origin/$BRANCH --stat       # stats (full diff if needed)
 ```
 
-**Show change stats:**
-
-```bash
-git diff HEAD...origin/$BRANCH --stat
-```
-
-**If needed, show full diff:**
-
-```bash
-git diff HEAD...origin/$BRANCH
-```
-
-### 1.5 Let user choose resolution
-
-Ask the user:
-- **Rebase (recommended)**: `git pull --rebase origin $BRANCH`
-- **Merge**: `git pull origin $BRANCH`
-- **Cancel workflow**
-
-If sync produces conflicts, stop and show conflict messages.
+Ask how to resolve: **Rebase** (`git pull --rebase origin $BRANCH`, recommended) / **Merge** (`git pull origin $BRANCH`) / **Cancel**. On conflict: stop, show conflicts.
 
 ---
 
 ## Step 2: Code Quality Checks
 
-**Important**: Run before committing to ensure only high-quality code is submitted.
+Run before committing.
 
-### 2.1 Auto-detect project type
+### 2.1 Detect project type
 
-Check in order:
-
-| File | Project Type |
-|------|-------------|
+| File | Type |
+|------|------|
 | `Cargo.toml` | Rust |
 | `package.json` | Node.js |
-| `pyproject.toml` or `setup.py` | Python |
+| `pyproject.toml` / `setup.py` | Python |
 | `go.mod` | Go |
 
-### 2.2 Run quality checks
+### 2.2 Run checks
 
-Based on the detected project type, run the appropriate:
-
-1. **Format** — auto-fix code formatting
-2. **Lint** — check for code quality issues, auto-fix where possible
-3. **Type check** — verify type correctness (if applicable)
-4. **Test** — run all tests and ensure they pass
-
-All checks must pass. If any check fails and cannot be auto-fixed, ask the user whether to continue.
-
-Any auto-fixed changes will be included in the Step 3 commit.
-
-### 2.3 Check result handling
-
-- All checks pass: show "✓ Code quality checks passed"
-- Auto-fixed changes: these changes will be committed together in Step 3
-- Unfixable errors: ask user whether to continue
+Per type: **format** → **lint** → **type check** (if any) → **test**. All must pass. Auto-fixes are committed in Step 3. If a check fails and can't auto-fix, ask whether to continue.
 
 ---
 
-## Step 3: Commit All Changes
-
-### 3.1 Show all changes
+## Step 3: Commit Changes
 
 ```bash
 git status
 git diff --stat
 ```
 
-### 3.2 Let user confirm
-
-- Show change summary
-- Suggest commit message (based on change content)
-- Let user confirm or modify the commit message
-
-### 3.3 Execute commit
+Summarize changes, suggest a commit message, let the user confirm/edit, then:
 
 ```bash
 git add -A
@@ -134,276 +92,141 @@ git commit -m "<message>"
 
 ---
 
-## Step 4: Ask User Whether to Release a New Version
+## Step 4: Release or Not
 
-### 4.1 Analyze commit history
+### 4.1 Analyze commits since last tag
 
 ```bash
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-if [ -n "$LAST_TAG" ]; then
-  git log $LAST_TAG..HEAD --pretty=format:"%s"
-else
-  git log --pretty=format:"%s" --max-count=20
-fi
+[ -n "$LAST_TAG" ] && git log $LAST_TAG..HEAD --pretty=format:"%s" \
+                   || git log --pretty=format:"%s" --max-count=20
 ```
 
-### 4.2 Suggest version bump based on Conventional Commits
+### 4.2 Suggest semver bump (Conventional Commits)
 
-Analyze commit messages:
-- Contains `BREAKING CHANGE` or `!:` → **major** bump (X.0.0)
-- Contains `feat:` → **minor** bump (x.Y.0)
-- Only `fix:`, `chore:`, `docs:`, `refactor:`, etc. → **patch** bump (x.y.Z)
+- `BREAKING CHANGE` / `!:` → **major**
+- `feat:` → **minor**
+- else (`fix:`/`chore:`/`docs:`/`refactor:`…) → **patch**
 
-### 4.3 Show suggestion
+### 4.3 Ask
 
-```
-Last version: v1.2.3
-Change summary:
-- 3 new features (feat)
-- 2 fixes (fix)
-- 1 doc update (docs)
-
-Suggested new version: v1.3.0 (minor bump due to new features)
-```
-
-### 4.4 Let user choose
-
-Ask the user:
+Show last version + change summary + suggested version, then:
 
 ```
-Would you like to release a new version?
-[1] Yes, use suggested version v1.3.0
-[2] Yes, use a custom version
-[3] No, just push without release
+[1] Yes, suggested version  [2] Yes, custom version  [3] No, push only
 ```
 
-If user chooses [3] (no release):
-- Push to remote directly
-- Workflow ends
+`[3]`: push to remote, then go to Step 6.
 
 ---
 
-## Step 5: Version Release Process
+## Step 5: Release
 
-If the user chooses to release a new version, execute in order:
+### 5.1 Normalize version
 
-### 5.1 Normalize version format
+Accept `v1.2.3` or `1.2.3`; use `v` prefix internally.
 
-- Accept input as `v1.2.3` or `1.2.3`
-- Internally use `v` prefix format consistently
+### 5.2 Bump config version (no `v` prefix)
 
-### 5.2 Update project config version
-
-Based on detected project type:
-
-**Rust (`Cargo.toml`)**:
-```toml
-version = "x.y.z"  # without v prefix
-```
-
-**Node.js (`package.json`)**:
-```json
-"version": "x.y.z"  // without v prefix
-```
-
-**Python (`pyproject.toml`)**:
-```toml
-version = "x.y.z"  # without v prefix
-```
+- Rust `Cargo.toml`: `version = "x.y.z"`
+- Node `package.json`: `"version": "x.y.z"`
+- Python `pyproject.toml`: `version = "x.y.z"`
 
 ### 5.3 Update CHANGELOG.md
 
-If `CHANGELOG.md` exists, convert the `## [Unreleased]` section to a new version section.
-If it does not exist, create a new file with the version section.
+Convert `## [Unreleased]` into a dated version section (create file if absent); leave an empty `## [Unreleased]` behind.
 
 ```markdown
 ## [vX.Y.Z] - YYYY-MM-DD
-
-### Added
-- List of new features (extracted from feat: commits)
-
-### Changed
-- List of changes (extracted from refactor:, chore: commits)
-
-### Fixed
-- List of fixes (extracted from fix: commits)
-
-### Docs
-- Documentation updates (extracted from docs: commits)
+### Added / Changed / Fixed / Docs
+- from feat: / refactor:,chore: / fix: / docs: commits
 ```
-
-Preserve an empty `## [Unreleased]` section for future use.
 
 ### 5.4 Update README.md
 
-- Update version badge (if present)
-- Update version references (if present)
+Update version badge / references if present.
 
-### 5.5 Commit file changes
+### 5.5 Commit + tag
 
 ```bash
 git add -A
 git commit -m "chore: release vX.Y.Z"
-```
-
-### 5.6 Create Git Tag
-
-```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z
 
-<release notes content>"
+<release notes>"
 ```
 
-### 5.7 Push to remote
+### 5.6 Push
 
 ```bash
 git push origin $BRANCH
 git push origin --tags
 ```
 
-### 5.8 Check for remote Release Action
-
-After pushing the tag, check if the project has a GitHub Actions workflow that auto-creates releases:
+### 5.7 Auto-release detection
 
 ```bash
-if [ -f .github/workflows/release.yml ]; then
-  echo "✓ Remote release workflow detected, GitHub Actions will auto-create Release"
-  SKIP_LOCAL_RELEASE=true
-else
-  echo "✓ No auto release workflow detected"
-  SKIP_LOCAL_RELEASE=false
-fi
+[ -f .github/workflows/release.yml ] && echo "auto" || echo "manual"
 ```
 
-If `SKIP_LOCAL_RELEASE=true`:
-- Show message that Release will be auto-created by GitHub Actions
-- Provide Actions page link for tracking: `https://github.com/<owner>/<repo>/actions`
-- Skip Step 5.9
+- **auto**: GitHub Actions creates the Release. Give Actions link `https://github.com/<owner>/<repo>/actions`. Skip 5.8.
+- **manual**: continue to 5.8.
 
-If `SKIP_LOCAL_RELEASE=false`:
-- Continue to Step 5.9
+### 5.8 Create GitHub Release (manual only)
 
-### 5.9 Create GitHub Release (only when no auto workflow)
+Priority: **GitHub MCP** → **gh CLI** → **manual link**.
 
-**This step only executes when the project has no auto release workflow.**
-
-**Tool priority:**
-
-1. **GitHub MCP Server** (preferred)
-   - Use MCP tool to create Release
-
-2. **gh CLI** (fallback)
-   ```bash
-   gh release create vX.Y.Z \
-     --title "Release vX.Y.Z" \
-     --notes "<release notes>"
-   ```
-
-3. **Prompt user to create manually** (last resort)
-   ```
-   Please create the Release manually on GitHub:
-   https://github.com/<owner>/<repo>/releases/new?tag=vX.Y.Z
-   ```
-
-Use the collected release notes as the description, mark as latest version.
-
-### 5.10 Show results
-
-**If auto release workflow exists:**
-```
-✓ Project config version updated
-✓ CHANGELOG.md updated
-✓ README.md updated (if applicable)
-✓ Tag vX.Y.Z created
-✓ Pushed to remote
-
-→ GitHub Actions will auto-create Release
-→ Track progress: https://github.com/user/repo/actions
-→ View after completion: https://github.com/user/repo/releases/tag/vX.Y.Z
+```bash
+gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "<notes>"
 ```
 
-**If no auto workflow (local creation):**
-```
-✓ Project config version updated
-✓ CHANGELOG.md updated
-✓ README.md updated (if applicable)
-✓ Tag vX.Y.Z created
-✓ Pushed to remote
-✓ GitHub Release created
+Manual fallback: `https://github.com/<owner>/<repo>/releases/new?tag=vX.Y.Z`
 
-Release link: https://github.com/user/repo/releases/tag/vX.Y.Z
+### 5.9 Report
+
+Show updated files, tag, push status, and Release link / Actions link.
+
+---
+
+## Step 6: Cleanup Feature Branch
+
+If `FEAT_BRANCH` was set in Step 1.1 (i.e. user chose Switch to main) and the release/push succeeded, ask to remove the now-merged local branch:
+
+```bash
+git branch -d "$FEAT_BRANCH"   # -d = safe; refuses if unmerged
 ```
+
+Use `-d` only (never `-D`). If git refuses (unmerged), report and leave the branch.
 
 ---
 
 ## Error Handling
 
-- If a git operation fails, show error message and stop the workflow
-- If no auto release workflow and GitHub MCP is unavailable, fall back to gh CLI
-- If gh CLI is unavailable, fall back to prompting user to create manually
-- If file update fails, ask user whether to continue
-
----
-
-## Usage Examples
-
-```bash
-# Quick push (auto checks, commit, ask whether to release)
-/git-release
-
-# Release with specific version
-/git-release v1.3.0
-
-# Release a patch version
-/git-release v1.2.1
-```
+- Git op fails → show error, stop.
+- No auto workflow + no MCP → gh CLI → manual link.
+- File update fails → ask whether to continue.
 
 ---
 
 ## Notes
 
-### Version Format
+**Semver**: major = breaking; minor = backward-compatible feature; patch = backward-compatible fix.
 
-Recommended to use Semantic Versioning:
-- **Major** (X.0.0): incompatible API changes
-- **Minor** (x.Y.0): backward-compatible new features
-- **Patch** (x.y.Z): backward-compatible bug fixes
+**Commit type → bump**: `feat`→minor, `BREAKING CHANGE`→major, all others→patch.
 
-### Conventional Commits Type Mapping
+**Branch protection**: direct push to protected `main` may fail.
 
-| Type | Description | Version Impact |
-|------|-------------|----------------|
-| `feat:` | New feature | minor |
-| `fix:` | Bug fix | patch |
-| `docs:` | Documentation | patch |
-| `style:` | Formatting | patch |
-| `refactor:` | Refactoring | patch |
-| `perf:` | Performance | patch |
-| `test:` | Tests | patch |
-| `chore:` | Maintenance | patch |
-| `BREAKING CHANGE` | Breaking change | major |
+**Auto-release**: triggered by tag push, e.g.
 
-### Branch Protection
+```yaml
+on: { push: { tags: ["v*.*.*"] } }
+```
 
-If the main branch has protection rules, direct push may not be possible.
+If your project uses another filename (`ci.yml`, `build.yml`), adjust 5.7 detection.
 
-### Permissions Required
+## Usage
 
-Ensure you have push permissions and Release creation permissions.
-
-### Auto Release Workflow Detection
-
-- After pushing a tag, checks whether `.github/workflows/release.yml` exists
-- If it exists, the project has a GitHub Actions workflow for auto-creating Releases
-- In this case, the local Release creation step is skipped to avoid duplication
-- Common auto release workflow trigger:
-  ```yaml
-  on:
-    push:
-      tags:
-        - "v*.*.*"
-  ```
-- If your project uses a different filename (e.g., `ci.yml`, `build.yml`), you may need to manually adjust the detection logic
-
----
+```bash
+/git-release            # commit + ask whether to release
+/git-release v1.3.0     # release specific version
+```
