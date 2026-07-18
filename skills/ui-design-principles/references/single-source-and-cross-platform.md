@@ -71,3 +71,46 @@ control should exist only on platforms with no native home for it.
 save/revert in an editor host) should be *ceded* to the platform, not duplicated. Fighting the
 host's model (e.g. keeping your own dirty flag inside an editor that already tracks one) creates
 two sources of truth — see rule 1.
+
+## 4. About panel — content checklist + optional Help/About shared panel
+
+The About panel is the canonical instance of the "Info/About text" row from §1: composed once in
+the core, with each host appending only its host-specific lines (config path, storage
+disclosure). The required and conditional entries:
+
+| Entry | Single source | Required |
+|---|---|---|
+| **App name + short description** | Core app metadata; one phrase naming the app and what it does | ✓ |
+| **Version** | Build-stamped from the package manifest (rule 1); identical string to the header | ✓ |
+| **Author / maintainer** | The manifest's author/maintainer field | ✓ |
+| **Project URL** | One constant in the info catalog; every "open project" / "report issue" link shares it | ✓ |
+| **Privacy policy URL** | Same catalog; the only place the URL lives | ✓ |
+| **License** | SPDX identifier or short license name from the manifest | ✓ |
+| **Copyright notice** | Composed at build time from the manifest year range | As applicable |
+| **Third-party / OSS notices** | Generated from the dependency manifest at build time | As applicable |
+
+**Why every entry is single-sourced:** a stale or forked copy anywhere — an old privacy URL
+hardcoded in one host, a copyright year baked into another, a license string typed by hand in a
+third — is a future bug the user sees before you do. If the catalog is the only place the URL
+lives, every host renders the same answer.
+
+**Why license is non-negotiable while copyright is conditional:** license is a legal statement
+about the code itself and must always travel with the binary; copyright notice is a convention
+whose form varies by license (e.g. MIT asks for "the copyright notice", many permissive licenses
+don't mandate a year range), so emit it only when the chosen license actually calls for it.
+
+### Help / About shared panel — recommended, not mandatory
+
+Help and About are both infrequent, short-lived, read-once info surfaces owned by the same core
+path. When that holds, they compose naturally into **one switchable panel** (tabs, segmented
+control, or in-TUI a tabbed section) rather than two disconnected windows/popups:
+
+- One surface to open, one to close, one Esc peel (rule 14) — no per-surface keybindings to
+  relearn.
+- One place to apply the "everything that overflows, scrolls" contract (rule 11).
+- One shared host wrapper (`<dialog>`, bottom sheet, native about window) — see §2.
+
+This is a *recommendation*, not a rule. Split them when the weights diverge: if Help is large
+(searchable documentation, an embedded manual, a tutorial) while About is a short metadata
+block, two surfaces is correct. The shared panel wins when both are short info surfaces of
+similar weight — which is the common case for utility apps and editor extensions.

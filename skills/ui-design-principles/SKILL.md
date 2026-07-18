@@ -108,8 +108,14 @@ default to the matching principle below rather than inventing one.
 
 ## F. Chrome, layout, plumbing
 
-18. **Header shows app name + version** (top bar or title bar); version is build-stamped
-    (principle 1), and a version visible in sample/demo content doubles as a stale-cache check.
+18. **Header shows app name + version; About has a fixed content checklist; Help and About may
+    share one panel.** Version is build-stamped (principle 1); a version visible in sample/demo
+    content doubles as a stale-cache check. About content is single-sourced and complete: app
+    description, version, author, project URL, privacy policy, license — copyright and
+    third-party notices only when applicable. Help and About fit naturally as **one switchable
+    panel** (tabs/sections) since both are infrequent, short-lived info surfaces — recommended,
+    not mandatory. **Full checklist + panel pattern:**
+    [references/single-source-and-cross-platform.md](references/single-source-and-cross-platform.md) §4.
 
 19. **Layout is resize-aware.** Recompute layout/viewport on every resize; never hardcode
     dimensions. Popups obey the responsive size caps (reference in 15).
@@ -135,3 +141,5 @@ default to the matching principle below rather than inventing one.
 - Testing list moves only upward and shipping the downward off-by-one — twice (violates 17).
 - `print` debugging inside an active TUI screen (violates 21).
 - Hardcoded English strings needing later extraction (violates 22).
+- About panel missing license/privacy policy, or forking the privacy/project URL per host
+  (violates 18).
