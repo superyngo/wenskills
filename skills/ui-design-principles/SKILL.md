@@ -69,8 +69,14 @@ default to the matching principle below rather than inventing one.
 
 ## C. Keyboard & input contracts
 
-10. **Text inputs support arrows + Home/End**; multi-line inputs add PgUp/PgDn. This is the
-    baseline contract of any text field.
+10. **Text inputs honor the full editing contract: move + select + edit + clipboard.** Beyond
+    arrows + Home/End (and PgUp/PgDn for multi-line), every text field supports Shift+move
+    selection, word/line jumps, delete char/word, cut/copy/paste, and undo/redo — using the
+    platform-correct modifier (Cmd on macOS, Ctrl on Win/Linux, Emacs-style `Ctrl+A/E/K/U/W/Y`
+    in a TUI where `Shift+arrow` and `Ctrl+C`/`Ctrl+Z` are unreliable or host-owned). Cut is
+    atomic (copy-first, delete-on-success); failed paste preserves the field; undo restores the
+    caret, not just the text. **Full key tables, TUI fallbacks, and the `Ctrl+A`/`Ctrl+C`
+    conflicts:** [references/text-editing-contract.md](references/text-editing-contract.md).
 
 11. **Everything that can overflow, scrolls — with keys.** Lists, logs, detail popups, help
     overlays, info panels, inline editors: all support line-wise (arrows), page-wise
@@ -137,6 +143,11 @@ default to the matching principle below rather than inventing one.
 - Error/paste states that dim rows or recolor the cursor until focus is unfindable (violates 5).
 - Storing the cursor's screen position instead of deriving it (violates 7).
 - Resetting selection/scroll/expanded state on reload or re-render (violates 8, 15-reference).
+- Binding `Ctrl+C` to copy, or `Shift+arrow` as the only selection path, in a TUI raw-mode editor
+  (violates 10 — host owns `Ctrl+C`/`Ctrl+Z`; most terminals swallow `Shift+arrow`).
+- Cursor moving by byte/codepoint in CJK or emoji text, or landing mid-surrogate (violates 10).
+- Cut that deletes before the clipboard copy succeeds, losing the text on a locked clipboard
+  (violates 9, 10).
 - A dropdown trigger that reopens instead of closing on the second click (violates 15).
 - Testing list moves only upward and shipping the downward off-by-one — twice (violates 17).
 - `print` debugging inside an active TUI screen (violates 21).

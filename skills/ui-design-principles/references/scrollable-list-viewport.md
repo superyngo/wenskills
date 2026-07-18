@@ -50,6 +50,30 @@ Using `viewport_height = 10`, `total_items = 50` as an example:
 - When `viewport_height` changes (resize): recompute the `scroll_offset` clamp, but **do not reset** `selected_index`; if `selected_index` is no longer within the viewport after recomputation, apply the two scrolling rules above to bring it back into view.
 - Page Up/Down, Home/End, jump-to-specific-index, etc. all go through the same path of "change `selected_index` first, then apply the scrolling rules" — do not write a separate scrolling implementation per input.
 
+## Framework-managed offsets: chrome accounting must be exact
+
+When the list is rendered through a widget library that ALSO keeps the selection visible on
+its own (e.g. ratatui's `ListState`: if `selected >= offset + real_height` it silently bumps
+the offset during render), your `viewport_height` must equal the **actually rendered** row
+count exactly. Derive it as `total_height - chrome`, where chrome is every fixed row around
+the list (title, status bar, conditional search bar, column header, separator — count each
+row, not each widget: a "header" that draws a label row plus a separator row is 2, not 1).
+
+If chrome is undercounted by 1, your clamp allows the cursor one row past the real bottom;
+the library shifts its (per-frame, throwaway) offset to show it, and your stored
+`scroll_offset` is now stale by one. Telltale symptom: with the cursor on the bottom row,
+the first ↑ scrolls the viewport one line while the cursor visually stays on the bottom row,
+and only the second ↑ moves it. The math in both layers is "correct"; the bug is the
+mismatch between them.
+
+Guards:
+- Keep the chrome constant next to (or derived from) the layout code that renders those
+  rows, with a comment tying each unit to a rendered row.
+- Regression-test with a render-to-buffer backend: draw at a known size with the cursor at
+  the bottom, then assert BOTH your stored `scroll_offset` value AND that the first list row
+  of the buffer shows the item at `scroll_offset`. (The buffer assertion alone can pass even
+  when the stored offset is stale — the library's correction hides the desync.)
+
 ## State preservation
 
 - Operations that trigger a redraw (edit / save / reload) **must preserve** `selected_index` and `scroll_offset`; never reset them to 0.
