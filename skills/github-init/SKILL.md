@@ -78,14 +78,20 @@ Prompt user to confirm which files to generate (pre-selected based on project ty
 
 ## Installation
 
+### Via wenget
+
+```bash
+wenget add <project-name>
+```
+
 ### Windows (PowerShell)
 ```powershell
-$env:APP_NAME="<project-name>"; $env:REPO="superyngo/<project-name>"; irm https://gist.githubusercontent.com/superyngo/a6b786af38b8b4c2ce15a70ae5387bd7/raw/gpinstall.ps1 | iex
+$env:APP_NAME="<project-name>"; $env:REPO="superyngo/<project-name>"; irm https://gist.githubusercontent.com/superyngo/a6b786af38b8b4c2ce15a70ae5387bd7/raw/gpinstaller.ps1 | iex
 ```
 
 ### Linux / macOS (Bash)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/superyngo/<project-name>/main/install.sh | bash
+APP_NAME="<project-name>" REPO="superyngo/<project-name>" curl -fsSL https://gist.githubusercontent.com/superyngo/a6b786af38b8b4c2ce15a70ae5387bd7/raw/gpinstaller.sh | bash
 ```
 
 ## Usage
