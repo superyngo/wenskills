@@ -1,76 +1,91 @@
 ---
 name: github-init
-description: Use when initialising a new GitHub repository or Gist for the current directory. Handles git init, skeleton file generation (README, CHANGELOG, LICENSE, .gitignore, release workflow), remote creation, and initial push.
+description: Use when initializing a new GitHub repository or Gist for the current directory. Handles git init, pre-flight checks, standard skeleton file generation (README, CHANGELOG, LICENSE, .gitignore, PRIVACY.md, release workflow), remote creation, and initial push.
 argument-hint: [repo|gist]
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
 ---
 
-# GitHub 初始化流程
+# GitHub Initialization Workflow
 
-為當前目錄建立 GitHub 遠端倉庫或 Gist，並生成標準項目骨架文件。
-
----
-
-## 步驟 0：確認模式
-
-根據參數決定流程：
-- 參數為 `gist` → 直接跳至步驟 5（Gist 流程）
-- 參數為 `repo` 或無參數 → 執行 Repo 流程
-- 若不明確，詢問用戶：「建立 GitHub Repo 還是 Gist？」
+Initialize a GitHub remote repository or Gist for the current directory and generate standard project skeleton files.
 
 ---
 
-## 步驟 1：檢查 Git 狀態
+## Step 0: Determine Mode
+
+Determine execution flow based on argument:
+- Argument is `gist` → Skip directly to Step 5 (Gist Workflow).
+- Argument is `repo` or omitted → Execute Repository Workflow.
+- If ambiguous, ask user: "Create a GitHub Repository or Gist?"
+
+---
+
+## Step 1: Pre-flight & Git Health Checks
+
+Run pre-flight checks for `gh` authentication and Git status:
 
 ```bash
+# Check GitHub CLI authentication status
+gh auth status 2>/dev/null
+
+# Check Git configurations and remotes
+git config user.name 2>/dev/null
+git config user.email 2>/dev/null
 git remote -v 2>/dev/null
 git status 2>/dev/null
 ```
 
-根據結果：
-
-- **無 git 倉庫**：執行 `git init`，然後繼續
-- **有 git 倉庫，無遠端**：繼續步驟 2
-- **有 git 倉庫，已有遠端**：告知用戶遠端已存在，詢問是否只補建缺少的骨架文件，然後結束
-
----
-
-## 步驟 2：檢測項目類型
-
-按順序檢查以下標記文件：
-
-| 標記文件 | 項目類型 |
-|---|---|
-| `Cargo.toml` | Rust |
-| `package.json` | Node.js |
-| `pyproject.toml` / `setup.py` | Python |
-| `go.mod` | Go |
-| 無 | Generic |
-
-同時檢測是否為**二進制項目**：
-- Rust：存在 `src/main.rs`
-- Go：`main` package
-- Node.js：`package.json` 中有 `bin` 字段
+Handling pre-flight results:
+- **`gh` CLI not installed/authenticated**: Prompt user to install `gh` (`brew install gh`) or authenticate (`gh auth login`).
+- **Git user configuration missing**: Ask user for name/email or set sensible defaults before committing.
+- **No Git repository**: Run `git init && git branch -M main`, then proceed.
+- **Git repo exists, no remote**: Ensure default branch is set (`git branch -M main`), then proceed to Step 2.
+- **Git repo exists with remote**: Inform user that a remote already exists, ask whether to generate missing skeleton files only, then exit.
 
 ---
 
-## 步驟 3：生成骨架文件
+## Step 2: Detect Project Type
 
-詢問用戶確認要生成哪些文件（根據項目類型預先勾選，跳過已存在的文件）：
+Check for marker files in order:
 
-### 必選文件（所有 Repo）
+| Marker File | Project Type | Caching Recommendation |
+|---|---|---|
+| `Cargo.toml` | Rust | `Swatinem/rust-cache@v2` |
+| `package.json` | Node.js | `actions/setup-node@v4` with `cache: 'npm'` (or `pnpm`/`yarn`) |
+| `go.mod` | Go | `actions/setup-go@v5` with `cache: true` |
+| `pyproject.toml` / `setup.py` / `requirements.txt` | Python | `actions/setup-python@v5` with `cache: 'pip'` (or `poetry`/`uv`) |
+| None | Generic | Standard GitHub Actions caching as needed |
 
-**README.md**（若不存在）：
+Also detect if the project produces **binary executables**:
+- **Rust**: Presence of `src/main.rs` or `[[bin]]` in `Cargo.toml`.
+- **Go**: `main` package.
+- **Node.js**: Presence of `bin` field in `package.json`.
+
+---
+
+## Step 3: Generate Skeleton Files
+
+Prompt user to confirm which files to generate (pre-selected based on project type, skipping existing files):
+
+### Standard Required Files (All Repositories)
+
+**README.md** (if missing):
 
 ```markdown
 # <project-name>
 
 <description>
 
-## Installation (Windows)
+## Installation
 
+### Windows (PowerShell)
 ```powershell
 $env:APP_NAME="<project-name>"; $env:REPO="superyngo/<project-name>"; irm https://gist.githubusercontent.com/superyngo/a6b786af38b8b4c2ce15a70ae5387bd7/raw/gpinstall.ps1 | iex
+```
+
+### Linux / macOS (Bash)
+```bash
+curl -fsSL https://raw.githubusercontent.com/superyngo/<project-name>/main/install.sh | bash
 ```
 
 ## Usage
@@ -82,9 +97,9 @@ $env:APP_NAME="<project-name>"; $env:REPO="superyngo/<project-name>"; irm https:
 MIT
 ```
 
-> 僅當項目為二進制項目時才包含 Installation 段落。描述從用戶在步驟 4 提供的 repo description 中獲取。
+> **Note**: Include Installation section only if project is a binary project. Description is obtained from user in Step 4.
 
-**CHANGELOG.md**（若不存在）：
+**CHANGELOG.md** (if missing):
 
 ```markdown
 # Changelog
@@ -97,12 +112,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ```
 
-**LICENSE**（若不存在）— MIT，作者：`wen`，年份：當前年份：
+**LICENSE** (if missing) — MIT, author from `git config user.name` (fallback: `wen`), current year:
 
 ```
 MIT License
 
-Copyright (c) <YEAR> wen
+Copyright (c) <YEAR> <AUTHOR>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -123,20 +138,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-**.gitignore**（若不存在）— 根據項目類型：
+**.gitignore** (if missing) — Based on project type:
 
-- **Rust**：
+- **Rust**:
   ```
   /target/
   **/*.rs.bk
   ```
-- **Node.js**：
+- **Node.js**:
   ```
   node_modules/
   dist/
   .env
   ```
-- **Python**：
+- **Python**:
   ```
   __pycache__/
   *.pyc
@@ -144,18 +159,28 @@ SOFTWARE.
   dist/
   *.egg-info/
   ```
-- **Go**：
+- **Go**:
   ```
   *.exe
   *.exe~
   *.test
   vendor/
   ```
-- **Generic**：空或基本 OS 文件忽略
+- **Generic**: Empty or standard OS file ignores (`.DS_Store`, `Thumbs.db`).
 
-### 二進制項目額外文件
+**PRIVACY.md** (if missing):
 
-如果項目產生二進制程序，生成 `.github/workflows/release.yml`（從 Wenget 的 release.yml 改編，替換所有 `wenget` 為 `<project-name>`，並移除「Update bucket binary」最後步驟）：
+```markdown
+# Privacy Policy
+
+This application does not collect, store, or transmit any personal data or sensitive user information.
+
+Last updated: <YEAR>-<MONTH>-<DAY>
+```
+
+### Additional Files for Binary Projects
+
+If the project produces binary executables, generate `.github/workflows/release.yml` with comprehensive caching enabled:
 
 ```yaml
 name: Release Build
@@ -177,6 +202,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
   build:
@@ -267,14 +293,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Rust
+      - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross (for musl targets)
+      - name: Cache Rust dependencies and targets
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Cache cross binary (musl targets)
         if: matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl' || matrix.target == 'i686-unknown-linux-musl' || matrix.target == 'armv7-unknown-linux-musleabihf'
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cross
+          key: ${{ runner.os }}-cross-v1
+
+      - name: Install cross (for musl targets)
+        if: (matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl' || matrix.target == 'i686-unknown-linux-musl' || matrix.target == 'armv7-unknown-linux-musleabihf')
+        run: |
+          if ! command -v cross &> /dev/null; then
+            cargo install cross --git https://github.com/cross-rs/cross
+          fi
 
       - name: Install 32-bit libraries (Linux i686 only)
         if: matrix.target == 'i686-unknown-linux-gnu'
@@ -442,7 +483,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag_message.outputs.tag_name }}
           files: release_files/*
@@ -469,28 +510,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-> **重要**：生成此文件時，將所有 `<project-name>` 替換為實際的項目名稱（小寫）。
-
-### 可選文件（詢問用戶）
-
-**PRIVACY.md**（若用戶選擇）：
-
-```markdown
-# Privacy Policy
-
-This application does not collect, store, or transmit any personal data.
-
-Last updated: <YEAR>-<MONTH>-<DAY>
-```
+> **Important**: Replace all occurrences of `<project-name>` with the actual project name (lowercase) when generating this file.
 
 ---
 
-## 步驟 4：建立 GitHub Repo 並推送
+## Step 4: Create GitHub Repo and Push
 
-在生成骨架文件前，先詢問用戶：
+Before generating skeleton files, collect information from the user:
 
-1. **Repo 描述**（用於 `gh repo create` 的 `--description` 和 README.md）
-2. **可見性**：Public（預設）還是 Private？
+1. **Repository Description** (used for `gh repo create --description` and `README.md`)
+2. **Visibility**: Public (default) or Private?
 
 ```bash
 PROJECT_NAME=$(basename "$PWD")
@@ -503,71 +532,71 @@ gh repo create "$PROJECT_NAME" \
   --push
 ```
 
-- 若用戶選擇 Private，將 `--public` 替換為 `--private`
-- 推送後顯示 Repo URL
+- If user chooses Private, replace `--public` with `--private`.
+- Display the Repo URL after pushing.
 
-**執行順序**：
+**Execution Order**:
 
-1. 詢問用戶描述和可見性
-2. 生成骨架文件（使用描述填入 README.md）
-3. 執行初始 commit（`git add -A && git commit -m "chore: initial commit"`）
-4. 建立 GitHub Repo 並推送
+1. Prompt user for description and visibility.
+2. Generate skeleton files (fill `README.md` with description).
+3. Perform initial commit (`git add -A && git commit -m "chore: initial commit"`).
+4. Create GitHub repository and push (`git push -u origin main`).
 
 ---
 
-## 步驟 5：Gist 流程（參數為 gist 時）
+## Step 5: Gist Workflow (When Argument is `gist`)
 
 ```bash
-# 顯示當前目錄文件供用戶選擇
+# Display files in current directory for selection
 ls -la
 
-# 詢問用戶：
-# 1. 要上傳哪些文件（預設：所有非隱藏文件）
-# 2. Gist 描述
-# 3. Public 還是 Secret？（預設：Public）
+# Prompt user for:
+# 1. Which files to upload (default: all non-hidden files)
+# 2. Gist description
+# 3. Public or Secret? (default: Public)
 
 gh gist create <files> --desc "<description>" --public
-# 或
-gh gist create <files> --desc "<description>"  # secret 時省略 --public
+# Or omit --public for secret Gist:
+gh gist create <files> --desc "<description>"
 ```
 
-推送後顯示 Gist URL。
+Display Gist URL after creation.
 
 ---
 
-## 步驟 6：完成摘要
+## Step 6: Completion Summary
 
 ```
-✓ Git 倉庫已初始化
-✓ 骨架文件已生成：README.md, CHANGELOG.md, LICENSE, .gitignore [, .github/workflows/release.yml]
-✓ GitHub Repo 已建立：https://github.com/superyngo/<project-name>
-✓ 初始提交已推送到 main
+✓ Git repository initialized (default branch: main)
+✓ Skeleton files generated: README.md, CHANGELOG.md, LICENSE, .gitignore, PRIVACY.md [, .github/workflows/release.yml]
+✓ GitHub repository created: https://github.com/superyngo/<project-name>
+✓ Initial commit pushed to main branch
 
-後續步驟：
-- 編輯 README.md 填入完整的項目描述
-- 準備好發布版本時使用 /git-release
+Next Steps:
+- Edit README.md to complete project documentation
+- Prepare for version release using /git-release
 ```
 
 ---
 
-## 錯誤處理
+## Error Handling
 
-- `gh` CLI 未安裝 → 提示用戶安裝：`brew install gh` 或訪問 https://cli.github.com
-- `gh` 未認證 → 提示用戶運行 `gh auth login`
-- Repo 名稱已存在 → 告知用戶並詢問是否使用不同名稱或設置現有 Repo 為遠端
-- git 操作失敗 → 顯示錯誤訊息並停止流程
+- `gh` CLI not installed → Prompt user: `brew install gh` or visit https://cli.github.com
+- `gh` not authenticated → Prompt user to run `gh auth login`
+- Repository name exists → Inform user and ask to use a different name or set existing repo as remote
+- Git operation fails → Display detailed error message and abort workflow
 
 ---
 
-## 使用範例
+## Usage Examples
 
 ```bash
-# 為當前目錄建立 GitHub Repo（自動檢測類型）
+# Initialize GitHub repository for current directory (auto-detect project type)
 /github-init
 
-# 明確指定建立 Repo
+# Explicitly specify repository creation
 /github-init repo
 
-# 將當前目錄文件上傳為 Gist
+# Upload current directory files as a Gist
 /github-init gist
 ```

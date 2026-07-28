@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-07-28 — refactor(github-init): fully translate to English, add PRIVACY.md skeleton, and enable workflow caching
+
+- `skills/github-init/SKILL.md`: Translated all content into clear technical English. Added `PRIVACY.md` to the standard required skeleton files with a default privacy policy template. Modernized the `.github/workflows/release.yml` skeleton workflow with comprehensive caching (`Swatinem/rust-cache@v2`, `actions/cache@v4` for cross binaries, `CARGO_INCREMENTAL: 0`), and upgraded release action to `softprops/action-gh-release@v2`. Added pre-flight health checks (`gh auth status`, `git config user.name`/`user.email`, `git branch -M main`) and dual-platform installation snippets (`PowerShell` & `curl | bash`).
+
+### 2026-07-18 — feat(skills): expand ui-design-principles text-input contract (selection + clipboard)
+
+- `skills/ui-design-principles/references/text-editing-contract.md`: New reference covering the full text-field editing contract beyond cursor movement — Shift+move selection with a committed-anchor model (mirrors the list-selection two-set principle), word/line/document jumps, delete char/word/line, cut/copy/paste, undo/redo. Includes per-platform key tables (macOS Cmd / Win-Linux Ctrl / TUI Emacs-style `Ctrl+A/E/K/U/W/Y`), the `Ctrl+A` (select-all vs line-start) and `Ctrl+C`/`Ctrl+Z` (SIGINT/SIGTSTP) conflict resolution, TUI fallbacks for Shift+arrow selection (Emacs mark mode, mouse drag, kill/yank), grapheme-cluster-based offsets for CJK/emoji, IME composition handling, and atomic-cut / failed-paste-preserve invariants tying back to principles 8 and 9.
+- `skills/ui-design-principles/SKILL.md`: Principle 10 expanded from the bare "arrows + Home/End" baseline to the full editing contract (move + select + edit + clipboard), with the platform-modifier split and a link to the new reference. Common Mistakes gains three text-editing entries (Ctrl+C binding and Shift+arrow-only selection in a TUI; byte/codepoint cursor movement in CJK/emoji; non-atomic cut on a locked clipboard).
+
 ### 2026-06-23 — refactor(skills): condense git-release + branch handling
 
 - `skills/git-release/SKILL.md`: Moderately condensed prose to save tokens (kept all steps + bash). Added explicit uncommitted-change detection (ask → commit). Enhanced non-main branch handling: "Switch to main" now merges the feature branch into `main`, continues the release there, and a new Step 6 removes the merged local feature branch with `git branch -d` (safe; refuses if unmerged) after a successful release.

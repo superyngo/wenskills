@@ -1,6 +1,6 @@
 ---
 name: ui-design-principles
-description: Use when designing, building, or reviewing any user-facing UI — TUI, web, touch, or app shell — covering keyboard navigation, scrollable lists, text input, focus/selection visuals, popups and menus, reorderable lists, cross-platform/RWD component sharing, single-source-of-truth architecture, native-surface preference, layout/resize, logging, i18n, and version display. Apply whenever the user works on UI components, navigation, scrolling, input fields, list selection, popups, or asks how a UI element should look or behave, even if they don't explicitly say "design principles" or "conventions".
+description: Use when designing, building, or reviewing any user-facing UI — TUI, web, touch, or app shell — covering keyboard navigation, scrollable lists, text input, focus/selection visuals, popups and menus, reorderable lists, cross-platform/RWD component sharing, single-source-of-truth architecture, native-surface preference, layout/resize, logging, i18n, version display, and PWA/installability/offline-first baseline. Apply whenever the user works on UI components, navigation, scrolling, input fields, list selection, popups, or asks how a UI element should look or behave, even if they don't explicitly say "design principles" or "conventions".
 ---
 
 # UI Design Principles
@@ -135,6 +135,15 @@ default to the matching principle below rather than inventing one.
 22. **Plan i18n upfront.** Externalize all user-facing strings from day one; tolerate variable
     text length, CJK width, RTL. Retrofitting is far costlier.
 
+## G. Web (PWA)
+
+23. **On the web, PWA is a baseline, not an afterthought.** Ship installable from day one:
+    one web manifest sourced from the same app metadata as the version/About panel (principles
+    1, 18), a service worker for offline-first shell loading, and standalone display + theme
+    color so the installed app sheds browser chrome. Retrofitting a service worker into a
+    stateful server-rendered app post-launch is a rewrite — plan it upfront like i18n
+    (principle 22).
+
 ## Common Mistakes
 
 - Duplicating rules/strings/version per host instead of deriving from one source (violates 1).
@@ -154,3 +163,7 @@ default to the matching principle below rather than inventing one.
 - Hardcoded English strings needing later extraction (violates 22).
 - About panel missing license/privacy policy, or forking the privacy/project URL per host
   (violates 18).
+- Treating PWA as a post-launch enhancement, then retrofitting a service worker into a
+  stateful server-rendered flow (violates 23).
+- Forking app name/version/theme color between the web manifest and the About panel
+  (violates 1, 18, 23).
