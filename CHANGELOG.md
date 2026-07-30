@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-07-30 — refactor(publishing-platform-stores): grill and sharpen domain vocabulary
+
+- `skills/publishing-platform-stores/CONTEXT.md`: New — pins five terms surfaced by a grilling session: **Store** (third-party marketplace, credentials + listing required) vs. **Channel** (any distribution outlet, store or not); **Extension** as one category covering editor plugins, app plugins, and browser extensions alike (a browser is just another kind of host application, not a sibling category); and **Release**/**Publish**/**Submit** as three distinct pipeline stages (Submit generalized to include minting a store's canonical artifact for API-less stores like Obsidian, not just review-queue network calls).
+- `skills/publishing-platform-stores/docs/adr/0001-shared-publish-gate.md`: New ADR recording why the skill prescribes one shared `publish-gate` approval fanning out to every `publish-*.yml`, instead of a separate approval per store.
+- `skills/publishing-platform-stores/SKILL.md`: Retired "target" in favor of "store" throughout; collapsed the platform table from 4 categories to 3 (Desktop/Mobile/Extension, folding "IDE extension" and "Browser extension" into one); checklist step 5 now covers API-less stores explicitly; corrected a Common Mistakes row that conflated Obsidian's one-time directory-admission review with routine per-release review latency (ordinary Obsidian releases are unthrottled).
+- `skills/publishing-platform-stores/references/extension-obsidian.md`: Added the `workflow_dispatch(tag, run_id)` adaptation of Obsidian's official standalone template, for when Obsidian is one store among several in a multi-store pipeline rather than a lone plugin repo.
+
+### 2026-07-30 — feat(skills): add publishing-platform-stores
+
+- `skills/publishing-platform-stores/`: New reference skill for wiring GitHub Actions store-publishing workflows, generalized from a real production pipeline (build/tag → shared approval gate → per-store `publish-*.yml` fan-out). SKILL.md stays lightweight (pattern, platform table, wiring checklist, common mistakes); ten `references/*.md` cover the actual mechanics per store across four categories — desktop (Microsoft Store, Mac App Store, Steam), mobile (Google Play, Apple App Store/TestFlight), IDE extensions (VS Marketplace + Open VSX, Obsidian), and browser extensions (Chrome Web Store, Edge Add-ons, Firefox AMO). Microsoft Store and VS Marketplace/Open VSX references are sourced from a verified live workflow; the rest are sourced from official docs and flagged unverified-in-production. Extensible: new stores add one `references/<category>-<store>.md` file plus one table row.
+
 ### 2026-07-28 — refactor(github-init): fully translate to English, add PRIVACY.md skeleton, and enable workflow caching
 
 - `skills/github-init/SKILL.md`: Translated all content into clear technical English. Added `PRIVACY.md` to the standard required skeleton files with a default privacy policy template. Modernized the `.github/workflows/release.yml` skeleton workflow with comprehensive caching (`Swatinem/rust-cache@v2`, `actions/cache@v4` for cross binaries, `CARGO_INCREMENTAL: 0`), and upgraded release action to `softprops/action-gh-release@v2`. Added pre-flight health checks (`gh auth status`, `git config user.name`/`user.email`, `git branch -M main`) and dual-platform installation snippets (`PowerShell` & `curl | bash`).
