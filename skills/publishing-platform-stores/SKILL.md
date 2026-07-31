@@ -59,10 +59,16 @@ Why this shape, not one big workflow:
 - **Gate excludes dry runs.** Guard the gate job with
   `github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'`
   so manual `workflow_dispatch` test builds on `main` never trigger real store submissions.
+- **Selective publishing.** The default gate is all-or-nothing per release (every configured
+  store gets dispatched). If a project needs to choose which stores a given release reaches,
+  split the single gate job into one job per store, each behind its own
+  `environment: publish-gate-<store>` — GitHub's pending-deployments review screen then shows
+  one checkbox per store for that same run. See `docs/adr/0002-selective-publish-gate.md`.
 
 ## Platform Reference
 
-Every platform below needs its **first listing created manually** in that store's dashboard —
+Every platform below needs its **first listing created manually** — a store dashboard form for
+API-backed stores, or a one-time hand-run CLI submission for PR-based stores (winget, Obsidian);
 no researched API can create a brand-new app/extension/product; CI only updates an existing
 one. Load the reference file only for the store you're integrating.
 
@@ -71,6 +77,7 @@ one. Load the reference file only for the store you're integrating.
 | Desktop | Microsoft Store | `msstore` CLI / Partner Center Submission API | [desktop-microsoft-store.md](references/desktop-microsoft-store.md) |
 | Desktop | Mac App Store | Transporter / `altool` + App Store Connect API | [desktop-mac-app-store.md](references/desktop-mac-app-store.md) |
 | Desktop | Steam (Linux/cross-platform) | `steamcmd` via `game-ci/steam-deploy` | [desktop-steam.md](references/desktop-steam.md) |
+| Desktop | winget (Windows Package Manager) | `vedantmgoyal9/winget-releaser` (Komac) → PR to `microsoft/winget-pkgs` | [desktop-winget.md](references/desktop-winget.md) |
 | Mobile | Google Play | Play Developer API via `r0adkll/upload-google-play` | [mobile-google-play.md](references/mobile-google-play.md) |
 | Mobile | Apple App Store / TestFlight | App Store Connect API via fastlane `pilot`/`deliver` | [mobile-apple-app-store.md](references/mobile-apple-app-store.md) |
 | Extension | VS Marketplace + Open VSX | `vsce` / `ovsx` | [extension-vscode-openvsx.md](references/extension-vscode-openvsx.md) |
@@ -86,9 +93,11 @@ the reference set.
 
 ## Checklist: Wiring a New Store
 
-1. Create the app/product listing manually in the store's dashboard first (every platform
+1. Create the app/product listing manually first — a store dashboard form (Partner Center, App
+   Store Connect) for API-backed stores, or a one-time hand-run CLI submission (Obsidian's
+   first tagged release, winget's first `komac new`) for PR-based stores. Every platform
    researched requires this one-time manual step — don't spend time looking for a
-   create-listing API).
+   create-listing API.
 2. Read that store's reference file in full before writing YAML.
 3. Add the required GitHub secrets, named `<STORE>_<FIELD>` (uppercase, e.g.
    `MSIX_SUBMISSION_CLIENT_SECRET`).
