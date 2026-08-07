@@ -105,3 +105,7 @@ because nothing is being written into a note.
    it.
 4. If the search comes back empty, say so plainly rather than guessing at an answer from
    general knowledge — the whole point is grounding in what the user actually wrote down.
+
+## Reference
+
+- [references/vault-rules.md](references/vault-rules.md) — the pre-write self-check checklist that backs Branch 2. Load it only if you want a final sanity pass before showing a structured-capture draft; the same checks are already inline in Branch 2's numbered steps, so this is optional, not required reading.
