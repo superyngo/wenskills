@@ -26,3 +26,21 @@ Pick a branch from what the user asked for:
 
 If the request is ambiguous between Branch 1 and 2 (e.g. "記一下這個決定"), ask which:
 throwaway scratch, or a real note under its project/topic.
+
+## Branch 1: Quick capture
+
+Target: `~/repos/wenswiki/wenswiki/inbox/`. This is the vault's designated low-ceremony
+zone — `CLAUDE.md` §4 exempts it from every frontmatter/tag/format rule.
+
+1. If the user names an existing inbox file to append to, append to it. Otherwise create
+   a new file: `inbox/<kebab-case-topic>.md` (no date prefix — `CLAUDE.md` file-naming
+   rule applies vault-wide, inbox included).
+2. Write the content as-is: no frontmatter, no `<ai-suggestion>` wrapping, no tag
+   assignment. Plain prose or a bullet list is fine.
+3. Write it immediately — no confirmation step. This branch is intentionally
+   friction-free; that is the whole point of `inbox/` existing.
+4. Tell the user what you wrote and where, in one line, so they can find it later.
+
+Do not promote inbox content into a typed note (Branch 2) unless the user separately
+asks for that — a quick capture staying in `inbox/` forever is a fine outcome, not a
+defect to fix.
