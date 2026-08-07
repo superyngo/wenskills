@@ -85,3 +85,23 @@ Edge cases:
 - **No tag in the live §4 table fits:** propose the closest existing root/leaf and name
   the mismatch explicitly. Minting a new tag root is a vault-governance decision for the
   user (`CLAUDE.md` §4/§6), never something this skill decides on its own.
+
+## Branch 3: Query / synthesis
+
+Read-only. Never writes to the vault — `<ai-suggestion>` wrapping does not apply here,
+because nothing is being written into a note.
+
+1. **Infer a scope before searching.** Check `~/repos/wenswiki/CLAUDE.md` §4's live tag
+   table for a root/leaf matching the topic, and/or an obviously relevant folder (e.g. an
+   AWS question implies `notes/`, `reference/`, filtered toward `cs/aws/*`-tagged files).
+   Search only that inferred scope with `grep`/`glob` against the filesystem directly —
+   never the Obsidian plugin API (`CLAUDE.md` §3), and never every file in the vault.
+2. **If no scope can be inferred** (the request is genuinely vault-wide, e.g.
+   "summarize everything I know"), stop and ask which subtree or tag to search —
+   `CLAUDE.md` §3 requires an explicit scope for every search.
+3. **Answer in chat**, synthesized across whatever matched, citing the source file path
+   for every claim (e.g. "per `notes/aws-vpc-networking.md`: ..."). Do not paraphrase a
+   single file's content down to nothing — if the user wants the original wording, quote
+   it.
+4. If the search comes back empty, say so plainly rather than guessing at an answer from
+   general knowledge — the whole point is grounding in what the user actually wrote down.
