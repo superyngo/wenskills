@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-07 — feat(skills): add wenswiki-notes
+
+- `skills/wenswiki-notes/`: New skill for capturing session insights into, and querying,
+  the user's personal wenswiki vault (`~/repos/wenswiki/wenswiki`), fully compliant with
+  that vault's own `CLAUDE.md` governance. Three branches: quick capture to `inbox/`
+  (no ceremony, per that folder's format exemption), structured capture into
+  `notes/`/`projects/`/`runbooks/`/`reference/`/`work/` (search-first, live-schema-read,
+  always draft-then-confirm — never an auto-write fast path), and read-only cross-note
+  query/synthesis (scoped search, cited answers). `references/vault-rules.md` is a
+  pre-write self-check checklist. Design at
+  `docs/superpowers/specs/2026-08-07-wenswiki-notes-design.md`.
+
 ### 2026-07-30 — refactor(publishing-platform-stores): grill and sharpen domain vocabulary
 
 - `skills/publishing-platform-stores/CONTEXT.md`: New — pins five terms surfaced by a grilling session: **Store** (third-party marketplace, credentials + listing required) vs. **Channel** (any distribution outlet, store or not); **Extension** as one category covering editor plugins, app plugins, and browser extensions alike (a browser is just another kind of host application, not a sibling category); and **Release**/**Publish**/**Submit** as three distinct pipeline stages (Submit generalized to include minting a store's canonical artifact for API-less stores like Obsidian, not just review-queue network calls).
