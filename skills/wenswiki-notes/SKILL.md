@@ -44,3 +44,44 @@ zone — `CLAUDE.md` §4 exempts it from every frontmatter/tag/format rule.
 Do not promote inbox content into a typed note (Branch 2) unless the user separately
 asks for that — a quick capture staying in `inbox/` forever is a fine outcome, not a
 defect to fix.
+
+## Branch 2: Structured capture
+
+Target: `notes/`, `projects/`, `runbooks/`, `reference/`, or `work/` under
+`~/repos/wenswiki/wenswiki` — whichever `type:` fits the content. Never write here
+without completing all five steps in order; step 4 is a hard stop.
+
+1. **Search first.** Before drafting anything, `grep`/`glob` the likely subtree(s) for an
+   existing note on the same concept, matched on that note's `title:` and `aliases:`
+   frontmatter — not a loose substring match. Never search the whole vault; if you can't
+   tell which subtree is likely, ask the user which folder/project this belongs to.
+2. **Read the schema live.** Read `~/repos/wenswiki/CLAUDE.md` §4 (for the current tag
+   root table) and `~/repos/wenswiki/wenswiki/templates/<type>.md` (for the frontmatter
+   fields and section headings of that note type) in this turn. Never reuse a
+   previously-memorized copy of either — the table changes over time.
+3. **Draft, do not write:**
+   - If Step 1 found an existing note: draft the specific addition — which `##` section,
+     and the exact text to add there, wrapped in `<ai-suggestion>`.
+   - If not: draft a complete new file — frontmatter matching the target template exactly
+     (`title`, `type`, `created`/`updated` as today's date, `tags` chosen only from the
+     live §4 root table, `aliases`), body content wrapped in `<ai-suggestion>` following
+     that template's section structure.
+4. **Stop. Show the full draft verbatim in chat and wait for the user to confirm, edit,
+   or cancel.** Do this even if the request sounded final ("just save it") — `CLAUDE.md`
+   §1/§2 make the agent a maintainer, not an author, and the user's explicit choice for
+   this skill was "always draft, then confirm" with no fast-path exception.
+5. **On confirmation only:**
+   - Single file created/edited → write it directly; the resulting git diff is the
+     review trail (`CLAUDE.md` §2).
+   - Multiple files in one request → back up every pre-edit file first (copy aside, e.g.
+     to `/tmp/wenswiki-backup-<timestamp>/`), then write, then tell the user where the
+     backup is — mirrors the pattern already used for batch edits in `CHANGELOG.md`.
+
+Edge cases:
+- **Two existing notes could plausibly be the target of Step 1:** list both, ask the user
+  to pick. Do not guess.
+- **Content doesn't fit any of the nine `type:` values:** say so and ask, rather than
+  forcing a mismatched type.
+- **No tag in the live §4 table fits:** propose the closest existing root/leaf and name
+  the mismatch explicitly. Minting a new tag root is a vault-governance decision for the
+  user (`CLAUDE.md` §4/§6), never something this skill decides on its own.
