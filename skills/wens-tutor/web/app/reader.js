@@ -173,6 +173,8 @@ function trackReadingPos() {
   });
 }
 
+document.getElementById("toc-toggle").textContent = S.reader.toc;
+document.getElementById("ann-toggle").textContent = S.reader.annotations;
 for (const [btn, panel] of [["toc-toggle", "toc"], ["ann-toggle", "anns"]]) {
   document.getElementById(btn).addEventListener("click", () =>
     document.getElementById(panel).classList.toggle("open"));
