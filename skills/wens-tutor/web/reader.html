@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/style.css">
+<title>wens-tutor · reader</title>
+<header class="app"><a href="/">←</a><strong id="title"></strong>
+  <button id="toc-toggle" type="button">章節</button>
+  <button id="ann-toggle" type="button">標註</button></header>
+<main class="layout">
+  <nav id="toc" class="drawer"></nav>
+  <article id="doc"></article>
+  <aside id="anns" class="drawer"></aside>
+</main>
+<div id="selbar" class="selection-bar--float" hidden></div>
+<footer class="keys" id="keys"></footer>
+<script src="/vendor/markdown-it.min.js"></script>
+<script type="module" src="/app/reader.js"></script>
+</html>
