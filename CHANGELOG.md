@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-13 — docs(wens-tutor): second grilling round — banks are regions, +70 official questions
+
+- `skills/wens-tutor/docs/adr/0006-bank-is-a-region-not-a-file.md`: New — a Bank is a region of a
+  Material File, not a file. Measuring heading structure surfaced **70 official practice
+  questions hiding inside the two study guides** (7 `選擇題` regions of exactly 10, every one
+  with 4 options, an official answer, an official 解析, and zero defects) — 26% more questions
+  than the four exam papers hold, and the only official explanations in the corpus. The
+  file-typed model discarded all of it silently.
+- `skills/wens-tutor/docs/adr/0007-sections-identified-by-ancestor-path.md`: New — Sections are
+  keyed by ancestor path, not by a counter-deduplicated slug: `1. 前言與章節導覽` occurs 9 times
+  in the 科目1 guide and 12 times in 科目3, so a counter makes identity depend on how many
+  identical headings precede it and inserting one chapter moves the human's read-ticks onto
+  different sections. Ancestor paths are collision-free across all eight files.
+- `skills/wens-tutor/docs/adr/0005-explanations-live-in-content.md`: Corrected — its premise
+  ("the published banks contain no explanations at all") was false for the study guides. Now
+  distinguishes official explanations (parsed, never rewritten) from authored ones (exam papers
+  only, attributed).
+- `skills/wens-tutor/CONTEXT.md`: Course and Bank redefined as regions; new term Material File;
+  Annotation widened to any Material File; Progress pinned to leaf sections; Lookup widened to
+  cover banks as well as courses; Attempt gains resumability and wall-clock semantics.
+- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Rewritten again for the second round.
+  Corpus is now **270 questions in 11 banks**. Adds the second question shape and its parser
+  tolerances, resumable attempts with a wall-clock countdown and auto-submit, the statistics page
+  (five panels ordered score → pace → most-missed → per-bank → star/defect trend), dual-tab
+  Lookup (課程 + 考古題) with right-shortening queries that state the query actually used, the
+  keyboard/key-hint contract from `ui-design-principles`, an externalised string catalogue, and a
+  three-level `check` exit contract (0 clean / 1 content findings / 2 tool failure).
+
 ### 2026-08-13 — docs(wens-tutor): grill the design, pin the domain, record five ADRs
 
 - `skills/wens-tutor/CONTEXT.md`: New — domain glossary pinning 18 terms across content
