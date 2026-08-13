@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-13 — docs(wens-tutor): design spec for courseware review skill + site
+
+- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: New design for `wens-tutor`, a
+  skill that indexes a Markdown courseware root into a SQLite metadata DB and serves a
+  dynamically generated study site (portal, reader with persistent highlights/notes, mock
+  exam with per-attempt statistics, starred-question drilling, selection-driven lookup from
+  exam into course material). Architecture is one stdlib Python process mounting two static
+  roots — the engine from inside the skill, the content from the courseware repo — which is
+  how the engine/content path split is resolved without symlinks (forbidden by the wenswiki
+  vault's `CLAUDE.md` §2). Three measured findings shaped the design: SQLite FTS5 cannot
+  tokenize CJK (`unicode61` and `trigram` both miss a two-character query), a whole-corpus
+  substring scan costs 0.33 ms, and course/bank classification by content sniffing is 8/8
+  correct on the real material — so no search engine is built. First materials root is the
+  `ipas-ai-planner-2026` submodule (200 questions, 4 course files).
+
 ### 2026-08-07 — feat(skills): add wenswiki-notes
 
 - `skills/wenswiki-notes/`: New skill for capturing session insights into, and querying,
