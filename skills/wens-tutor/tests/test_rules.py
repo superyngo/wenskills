@@ -273,3 +273,88 @@ class TestLookup(unittest.TestCase):
         qkey = self.conn.execute("SELECT qkey FROM cat.question").fetchone()["qkey"]
         res = compose.lookup(self.conn, "Word2Vec", exclude_qkey=qkey)
         self.assertEqual(res["questions"], [])
+
+from tutorlib import api  # noqa: E402
+
+
+class TestApi(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "科目A").mkdir()
+        (self.tmp / "科目A" / "course.md").write_text("# 章\n\n## 節\n\n內容一段。\n", encoding="utf-8")
+        (self.tmp / "科目A" / "bank.md").write_text(
+            "### 第 1 題\n\n**答案：A**\n\n題幹\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n", encoding="utf-8"
+        )
+        self.conn = state.open_root(self.tmp)
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.tmp)
+
+    def test_portal_lists_files_with_progress_and_bank_counts(self):
+        code, data = api.handle(self.conn, "GET", "/api/portal", {}, None)
+        self.assertEqual(code, 200)
+        subjects = {s["subject"] for s in data["subjects"]}
+        self.assertEqual(subjects, {"科目A"})
+        files = data["subjects"][0]["files"]
+        course = next(f for f in files if f["relpath"].endswith("course.md"))
+        self.assertEqual(course["leaf_sections"], 1)
+        self.assertEqual(course["read_sections"], 0)
+
+    def test_annotation_round_trip_and_orphan_patch(self):
+        code, ann = api.handle(
+            self.conn,
+            "POST",
+            "/api/annotation",
+            {},
+            {"relpath": "科目A/course.md", "block_line": 5, "exact": "內容", "prefix": "", "suffix": "", "color": "yellow", "note_md": ""},
+        )
+        self.assertEqual(code, 200)
+        code, data = api.handle(self.conn, "GET", "/api/annotations", {"p": ["科目A/course.md"]}, None)
+        self.assertEqual(len(data["annotations"]), 1)
+        code, _ = api.handle(self.conn, "PATCH", f"/api/annotation/{ann['id']}", {}, {"orphan": 1})
+        self.assertEqual(code, 200)
+        code, data = api.handle(self.conn, "GET", "/api/annotations", {"p": ["科目A/course.md"]}, None)
+        self.assertEqual(data["annotations"][0]["orphan"], 1)
+
+    def test_paper_answer_submit_flow(self):
+        code, paper = api.handle(self.conn, "POST", "/api/paper", {}, {"cap": 10, "timed": False})
+        aid = paper["attempt_id"]
+        qkey = paper["questions"][0]["qkey"]
+        code, _ = api.handle(self.conn, "PUT", f"/api/attempt/{aid}/answer", {}, {"qkey": qkey, "given": "A", "ms": 900})
+        self.assertEqual(code, 200)
+        code, result = api.handle(self.conn, "POST", f"/api/attempt/{aid}/submit", {}, {})
+        self.assertEqual(result["correct"], 1)
+        self.assertEqual(result["score"], 100.0)
+
+    def test_in_flight_payload_never_carries_the_key(self):
+        code, paper = api.handle(self.conn, "POST", "/api/paper", {}, {"cap": 10, "timed": False})
+        for source in (paper, api.handle(self.conn, "GET", f"/api/attempt/{paper['attempt_id']}", {}, None)[1]):
+            for q in source["questions"]:
+                self.assertNotIn("answer", q)
+                self.assertNotIn("explanation_md", q)
+                self.assertNotIn("explanation_origin", q)
+
+    def test_submit_returns_the_key_for_wrong_questions_only(self):
+        code, paper = api.handle(self.conn, "POST", "/api/paper", {}, {"cap": 10, "timed": False})
+        aid = paper["attempt_id"]
+        qkey = paper["questions"][0]["qkey"]
+        api.handle(self.conn, "PUT", f"/api/attempt/{aid}/answer", {}, {"qkey": qkey, "given": "C", "ms": 100})
+        code, result = api.handle(self.conn, "POST", f"/api/attempt/{aid}/submit", {}, {})
+        self.assertEqual(len(result["wrong"]), 1)
+        item = result["wrong"][0]
+        self.assertEqual(item["qkey"], qkey)
+        self.assertEqual(item["answer"], "A")
+        self.assertEqual(item["given"], "C")
+        self.assertIn("stem_md", item)
+        self.assertIn("note_md", item)
+
+    def test_version_is_served(self):
+        code, meta = api.handle(self.conn, "GET", "/api/version", {}, None)
+        self.assertEqual(code, 200)
+        self.assertTrue(meta["version"])
+        self.assertEqual(meta["project"], "wens-tutor")
+
+    def test_unknown_route_is_404(self):
+        code, _ = api.handle(self.conn, "GET", "/api/nope", {}, None)
+        self.assertEqual(code, 404)
