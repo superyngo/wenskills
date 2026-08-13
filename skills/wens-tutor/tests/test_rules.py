@@ -138,3 +138,90 @@ class TestFidReconciliation(unittest.TestCase):
         self.assertEqual(report["unresolved"], [before[2]])
         self.assertEqual(conn.execute("SELECT qkey FROM star").fetchone()[0], before[2])
         conn.close()
+
+from tutorlib import compose  # noqa: E402
+
+
+class TestRules(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "科目A").mkdir()
+        qs = []
+        for i in range(1, 6):
+            qs.append(
+                f"### 第 {i} 題\n\n**答案：A**\n\n題幹{i}\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n"
+            )
+        # one defective question: references a figure with no artifact
+        qs.append("### 第 6 題\n\n**答案：B**\n\n如下圖所示為何?\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n")
+        (self.tmp / "科目A" / "bank.md").write_text("\n".join(qs), encoding="utf-8")
+        self.conn = state.open_root(self.tmp)
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.tmp)
+
+    def qkeys(self):
+        return [r["qkey"] for r in self.conn.execute("SELECT qkey FROM cat.question ORDER BY ordinal")]
+
+    def test_composition_excludes_defects_by_default(self):
+        pid = compose.compose(self.conn, {"cap": 50})
+        row = self.conn.execute("SELECT qkeys_json FROM paper WHERE id=?", (pid,)).fetchone()
+        self.assertEqual(len(json.loads(row["qkeys_json"])), 5)
+        pid2 = compose.compose(self.conn, {"cap": 50, "include_defective": True})
+        row2 = self.conn.execute("SELECT qkeys_json FROM paper WHERE id=?", (pid2,)).fetchone()
+        self.assertEqual(len(json.loads(row2["qkeys_json"])), 6)
+
+    def test_star_lifecycle_needs_two_consecutive_corrects(self):
+        target = self.qkeys()[0]
+
+        def sit(given):
+            pid = compose.compose(self.conn, {"cap": 50, "shuffle": False})
+            aid = compose.start_attempt(self.conn, pid)
+            compose.answer(self.conn, aid, target, given, 1000)
+            return compose.submit(self.conn, aid)
+
+        sit("C")  # wrong
+        self.assertEqual(self.conn.execute("SELECT origin FROM star WHERE qkey=?", (target,)).fetchone()["origin"], "wrong")
+        sit("A")  # first correct: star holds
+        self.assertIsNotNone(self.conn.execute("SELECT 1 FROM star WHERE qkey=?", (target,)).fetchone())
+        sit("A")  # second consecutive correct: star clears
+        self.assertIsNone(self.conn.execute("SELECT 1 FROM star WHERE qkey=?", (target,)).fetchone())
+
+    def test_manual_star_is_never_auto_cleared(self):
+        target = self.qkeys()[1]
+        self.assertTrue(compose.toggle_star(self.conn, target))
+        for _ in range(3):
+            pid = compose.compose(self.conn, {"cap": 50, "shuffle": False})
+            aid = compose.start_attempt(self.conn, pid)
+            compose.answer(self.conn, aid, target, "A", 500)
+            compose.submit(self.conn, aid)
+        self.assertEqual(
+            self.conn.execute("SELECT origin FROM star WHERE qkey=?", (target,)).fetchone()["origin"],
+            "manual",
+        )
+
+    def test_drill_contains_exactly_the_starred_questions(self):
+        a, b = self.qkeys()[0], self.qkeys()[2]
+        compose.toggle_star(self.conn, a)
+        compose.toggle_star(self.conn, b)
+        pid = compose.compose(self.conn, {"drill": True})
+        row = self.conn.execute("SELECT qkeys_json, limit_ms FROM paper WHERE id=?", (pid,)).fetchone()
+        self.assertEqual(sorted(json.loads(row["qkeys_json"])), sorted([a, b]))
+        self.assertIsNone(row["limit_ms"])
+
+    def test_timed_paper_scales_to_108s_per_question(self):
+        pid = compose.compose(self.conn, {"cap": 3, "timed": True})
+        row = self.conn.execute("SELECT limit_ms FROM paper WHERE id=?", (pid,)).fetchone()
+        self.assertEqual(row["limit_ms"], 3 * 108 * 1000)
+
+    def test_reopening_past_the_limit_submits_and_expires(self):
+        pid = compose.compose(self.conn, {"cap": 2, "timed": True, "shuffle": False})
+        aid = compose.start_attempt(self.conn, pid)
+        compose.answer(self.conn, aid, self.qkeys()[0], "A", 1000)
+        started = self.conn.execute("SELECT started FROM attempt WHERE id=?", (aid,)).fetchone()["started"]
+        late = started + (2 * 108) + 5
+        self.assertEqual(compose.remaining_ms(self.conn, aid, now=late), 0)
+        result = compose.submit(self.conn, aid, now=late)
+        self.assertTrue(result["expired"])
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["correct"], 1)
