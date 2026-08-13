@@ -40,15 +40,29 @@ counter-based identity silently shifts when a chapter is inserted.
 _Avoid_: chapter, block, fragment
 
 **Question**:
-A stem, its options, and its answer, parsed out of a Bank. Identified by its own content, not
-by where it sits.
+A stem, its options, and its answer, parsed out of a Bank. A Question is self-contained —
+everything needed to answer it is in its own stem and options, including any Shared Stem it
+carries. Identified by its own content, not by where it sits.
 _Avoid_: item, problem, exercise
 
+**Shared Stem**:
+A preamble in the source Markdown that several consecutive Questions depend on — the
+corpus's 題組. The corpus writes it two ways: a `## 第 46～50 題（題組）` heading followed by
+prose, or a `> 以下第46~48 題共用題幹：…` blockquote sitting at the tail of the previous
+Question's region. It is not an entity: the parser folds it into each member Question's stem
+as an attributed blockquote, so a Question is always answerable alone. 18 of the 270
+Questions carry one.
+_Avoid_: stimulus, passage, question group, 題組 (in code)
+
 **Defect**:
-A data flaw in a Question that makes it unfit to sit: `no_answer` (the source published no
-answer, or extraction lost it) or `figure_missing` (the stem refers to a figure, table, or
-code listing that is absent from the file). A Defect is a property of the content, repaired
-by Backfill — never by editing user data.
+A data flaw in a Question that makes it unfit to sit. Three kinds: `no_answer` (the source
+published no answer, or extraction lost it), `figure_missing` (the stem refers to a figure,
+table, or code listing that is absent from the file), and `unattributed_lines` (a line in a
+Question region the parser could not place in a stem, option, answer, Explanation, or Shared
+Stem). By provenance a Defect is **declared** when the transcriber wrote it down in words
+(`※ …請對照原始 PDF`) or **inferred** when only a keyword heuristic reaches it; the declared
+form is authoritative, and the Defect set is the union of the two. A Defect is a property of
+the content, repaired by Backfill — never by editing user data.
 _Avoid_: broken, invalid, bad question
 
 ### Sitting
@@ -57,6 +71,12 @@ _Avoid_: broken, invalid, bad question
 An ordered set of Questions plus the criteria that selected them. Produced by one act of
 composition; sat zero or more times.
 _Avoid_: exam, test, quiz (acceptable in conversation, never in code or docs)
+
+**Slot**:
+A Question's position as (Bank, ordinal) — the coordinate that survives an edit to the
+Question's text, and the only thing that lets user state relink when content-addressed
+identity changes.
+_Avoid_: index, position, number
 
 **Attempt**:
 One sitting of one Paper: the answers given, the time spent, and the resulting score. At most

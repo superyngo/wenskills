@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-13 — docs(wens-tutor): fourth grilling round — the plan was executed, not just read
+
+The implementation plan's own code blocks were extracted and run against the real corpus. Eight
+defects surfaced; three needed new decisions, and the ground truth itself was wrong.
+
+- `skills/wens-tutor/docs/adr/0011-shared-stems-are-folded-into-every-member-question.md`: New —
+  **18 of the 270 Questions were unanswerable as parsed.** Two 科目3 papers write a 題組's shared
+  stem two different ways (`## 第 46～47 題（題組）` heading; `> 以下第46~48 題共用題幹：` blockquote
+  at the tail of the *previous* Question) and the parser dropped both. The stem is now folded into
+  every member as an attributed `> **共用題幹（第46～48題）**` blockquote, preserving the invariant
+  that a Question is answerable alone. A `Stimulus` entity was rejected: it would have added a
+  special case to composition, Drill, the API and the exam page.
+- `skills/wens-tutor/docs/adr/0012-the-parser-attributes-every-line-or-reports-it.md`: New — the
+  parser silently discarded content on **14 Questions**, including all ten `※ …請對照原始 PDF。`
+  markers. Every non-blank line must now land in a stem, option, answer, Explanation or Shared
+  Stem, or become an `unattributed_lines` Defect. The corpus went 14 → 0 by learning two real
+  conventions, not by widening a tolerance.
+- `skills/wens-tutor/docs/adr/0013-answers-reach-the-client-only-at-submission.md`: New — the
+  in-flight Attempt payload shipped `explanation_md`, and all 70 official Explanations open with
+  `Ans(B)`. The key now arrives only in the submit response, for wrong Questions.
+- **Ground truth corrected, and it moved twice.** `figure_missing` was documented as 23; the
+  keyword heuristic measures 22, and reading the transcriber's own declarations (a third
+  convention, `〔註：…於此省略。〕`, was found during the round) brings the union to **25** —
+  **28 Defects**, never the 26 the spec, ADR 0004, the CHANGELOG and two verification steps all
+  asserted. 18 Questions declare their own Defect; 24 are inferred; exactly 1 is reachable only
+  through its declaration.
+- **Five more defects found by reading, fixed in the plan:** no page loaded the vendored
+  `markdown-it`, so `reader` and `exam` would have thrown at module load; the portal's
+  `!f.banks.length` filter hid both 學習指引 from 課程, contradicting its own verification text and
+  ADR 0006; `startClock` re-derived the deadline on every re-paint, so the countdown reset on each
+  question change and handed away unlimited time; `new bank --questions 10` emitted ten identical
+  placeholder stems that collapse to one Question under content-addressed identity; and Task 5's
+  relink test passed only because its fixture held one Question — proven by running the old and
+  new implementations side by side (old: `unresolved`, new: relinked by Slot).
+- `skills/wens-tutor/docs/adr/0002…`: Amended — a `question_slot(qkey, bkey, ordinal, ts)` row is
+  written at every parse, so an edited stem relinks by its Slot instead of guessing; skeleton
+  stems must be distinct.
+- `skills/wens-tutor/docs/adr/0004…`, `0008…`: Amended — corrected counts and declared/inferred
+  provenance; the manifest ships no `icons` key, since without a secure origin and a service
+  worker the install prompt cannot fire.
+- `skills/wens-tutor/CONTEXT.md`: Shared Stem and Slot added; Question now states the
+  self-containment invariant; Defect carries provenance and the third kind.
+- Spec and plan realigned: `GET /api/version` from `git describe`, per-Bank latest/best/attempt
+  counts, most-missed rows linking to a one-Question Drill, `--shape exam|guide`, three new `check`
+  findings (`unattributed_lines`, `collapsed_questions`, `overlapping_shared_stems`), and an
+  adversarial verification pass over the five rules that fail silently.
+- **Verification:** all 59 tests in the plan (29 in `test_parser.py`, 30 in `test_rules.py`) were
+  assembled verbatim from its code blocks and run green against the real corpus, including the
+  measured 270/11/18/7/3/25/0/28/70 assertions. A malformed nested code fence that corrupted
+  Task 2 and a missing `import json` in the test header were also repaired.
+
 ### 2026-08-13 — docs(wens-tutor): touch hosts over a private network, and the implementation plan
 
 - `skills/wens-tutor/docs/adr/0010-touch-hosts-over-a-private-network.md`: New — phones and tablets

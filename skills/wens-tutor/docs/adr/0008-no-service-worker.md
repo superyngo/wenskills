@@ -22,3 +22,8 @@ Chrome's install prompt will not appear regardless. A home-screen bookmark still
 manifest. If the site is ever fronted by real HTTPS (`tailscale serve`) *and* gains a client-side
 store that can survive without the server, the trade-off changes and this decision should be
 revisited.
+
+The manifest therefore ships no `icons` key at all. With no secure origin (ADR 0010) and no
+service worker, the install prompt cannot fire regardless, so shipping 192/512 icons to satisfy
+it would be theatre; the manifest earns its place through the home-screen name and theme colour
+only.

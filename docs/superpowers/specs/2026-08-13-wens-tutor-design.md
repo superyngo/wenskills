@@ -38,7 +38,11 @@ TLS in the engine; cloud sync; embedding or vector retrieval (also forbidden by 
 `CLAUDE.md` §6); inferring Progress from scroll position; non-multiple-choice Question types; a
 crawler.
 
-## Ground truth (measured 2026-08-13)
+## Ground truth (re-measured 2026-08-13)
+
+Re-measured after the third grilling round with the accepted parser rules (shared-stem folding,
+line attribution, declared-Defect union). The Defect totals below supersede the earlier 23/26;
+every figure is asserted by `tests/test_parser.py` and reported by `check`.
 
 ### Material Files
 
@@ -50,15 +54,32 @@ crawler.
 | `AI應用規劃師/115年第一次…第一科…_20260615003359.md` | 1 Bank | 50 Q, 2 `figure_missing`, 1 fenced stem |
 | `機器學習/…學習指引-科目3…_20251222101907.md` | Course + 4 Banks | 286 KB, 89 headings, 68 leaf, **40 Questions** |
 | `機器學習/ipas_ai_planner_L23_cheatsheet.md` | Course | 160 headings, 119 leaf |
-| `機器學習/114年第二梯次…第三科…_20251226000650.md` | 1 Bank | 50 Q, 10 `figure_missing`, 1 fenced stem |
-| `機器學習/115年第一次…第三科…_20260615003428.md` | 1 Bank | 50 Q, 9 `figure_missing` |
+| `機器學習/114年第二梯次…第三科…_20251226000650.md` | 1 Bank | 50 Q, **11 `figure_missing`** (10 declared), 1 fenced stem, **9 Questions folded** over 3 `（題組）` heading spans |
+| `機器學習/115年第一次…第三科…_20260615003428.md` | 1 Bank | 50 Q, **10 `figure_missing`** (0 declared), **9 Questions folded** over 4 `共用題幹` blockquote spans |
 
-**270 Questions in 11 Banks**, all single-answer, all with exactly 4 options:
+**270 Questions in 11 Banks** — all single-answer (0 multi-answer in the corpus), all with
+exactly 4 options:
 
-- **200** from the four exam papers: 3 `no_answer`, 23 `figure_missing` (11.5%), no
+- **200** from the four exam papers: 3 `no_answer`, **25 `figure_missing` (12.5%)**, no
   Explanations, zero images anywhere in the corpus.
 - **70** from the two study guides: 7 regions of exactly 10, **100% answered, 100% carrying an
   official Explanation, zero Defects** (ADR 0006).
+
+Measured totals:
+
+| Fact | Value |
+|---|---|
+| Questions | 270 (200 exam + 70 guide) |
+| Questions carrying a folded shared stem (題組) | **18** (9 in each 科目3 exam paper) |
+| Distinct shared-stem spans | **7** |
+| `no_answer` Defects | 3 |
+| `figure_missing` Defects | **25** = 18 declared in words by the transcriber ∪ 24 inferred by keyword (17 both, 7 inferred only, 1 declared only) |
+| `unattributed_lines` Defects | **0** |
+| Multi-answer Questions in the corpus | **0** |
+| **Total Defects** | **28** (was wrongly documented as 26) |
+| Option-count mismatches | 0 |
+| Section-path collisions | 0 |
+| `qkey` unique and stable across two parses | yes, 270 unique |
 
 Section identity: ancestor paths are **unique across all eight files, zero collisions**, while
 heading *text* repeats hard — `1. 前言與章節導覽` 9 times in the 科目1 guide and 12 times in the
@@ -174,7 +195,8 @@ cat.section(fid, path, level, title, is_leaf, line_start, line_end, text)
 cat.bank(bkey, fid, path, title, shape)          -- shape: 'exam' | 'guide'
 cat.question(qkey, bkey, ordinal, type, stem_md, options_json, answer,
              explanation_md, explanation_origin)  -- origin: 'official' | 'authored' | NULL
-cat.defect(qkey, kind)                            -- 'no_answer' | 'figure_missing'
+cat.defect(qkey, kind)                            -- 'no_answer' | 'figure_missing' | 'unattributed_lines'
+cat.question_slot(qkey, bkey, ordinal, ts)        -- written on every parse (decision 11)
 ```
 
 `bkey = (fid, path)`; `path` is the Section ancestor path (ADR 0007), so Bank identity survives
@@ -207,7 +229,8 @@ attempt_item(attempt_id, qkey, given, correct, ms, PRIMARY KEY(attempt_id, qkey)
   over stem hashes for Banks) when exactly one candidate qualifies. Ambiguity is reported for an
   explicit `relink`, never guessed.
 - **Stem edits** (fixing OCR typos is frequent here) change `qkey`; startup relinks orphaned
-  keys by `(bkey, ordinal)` and reports each relink.
+  keys by their `question_slot` (Bank, ordinal) — written on every parse — instead of guessing
+  at "exactly one free slot", and reports each relink (decision 11).
 - **Section renames** are *not* relinked — `check` reports read-ticks whose Section path is gone
   (ADR 0007).
 - Statistics derive from `attempt`/`attempt_item` at query time; no aggregate columns, so there
@@ -277,9 +300,42 @@ Parser tolerances, each driven by a real case in the corpus:
 | A `guide` Bank pairs with the **next sibling** `解答與解析` region; answers are `^\*\*(\d+)\.\s*Ans（([A-E])）`, Explanations are `^解析[：:]` | region order is `選擇題, 解答與解析` × 7, always adjacent |
 | An `**解析…：**` block after `exam` options is an authored Explanation, not stem, not an option | ADR 0005 |
 | Answers parse as `答案[：:]\s*([A-E]+)`; anything else stores `NULL` and a `no_answer` Defect | 3 Questions in 114-科1 hold the placeholder "（來源 PDF 此欄位無法擷取…）" |
-| `figure_missing` = the Question references 下圖/上圖/圖中/附圖/如圖/下表/上表/表中/以下程式/下列程式/程式碼中/程式中/如下所示 **and** contains no fenced block, no table row, no image | 23 Questions; 8 say so explicitly (`〔註：…省略。〕`), 15 say nothing at all |
+| `figure_missing` = the transcriber **declared** it (`※ …請對照原始 PDF。`, `〔註：…於此省略。〕`, `見原始 P…`) **or** the Question references 下圖/上圖/圖中/附圖/如圖/下表/上表/表中/以下程式/下列程式/程式碼中/程式中/如下所示 **and** contains no fenced block, no table row, no image | **25 Questions** = declared 18 ∪ inferred 24, of which 17 are both, 7 inferred only, and exactly 1 (114-科3 第45題) declared only. The declaration is authoritative and its line stays in the stem (ADR 0012) |
 | Both half-width and full-width punctuation, and full-width option parens | 115年 uses `,` `?`; 114年 uses `，` `？`; guides use `（A）` |
 | An inline `(A)` that is a *blank marker*, not an option, stays in the stem | 115-科3 Q40/Q46: "圖中(A)與(B)的函數應填入何者" |
+
+**Shared stem (題組)** — the corpus writes a shared stem two ways, and the parser recognises
+both and **folds** the text into every member Question's `stem_md` (ADR 0011), so a Question
+stays answerable alone and no `Stimulus` entity is modelled:
+
+1. a `## 第 46～50 題（題組）` heading followed by the shared prose; or
+2. a blockquote `> 以下第46~48 題共用題幹：…` sitting at the tail of the *previous* Question's
+   region.
+
+The shared text is prepended to every member Question's `stem_md` as an attributed blockquote:
+
+```markdown
+> **共用題幹（第46～48題）**
+>
+> <the quoted shared text>
+```
+
+Shuffle, Drill and Lookup therefore need no special case: a shuffled Question still carries its
+shared stem. 18 Questions are folded this way, across 7 distinct spans (9 in each 科目3 paper).
+
+**Line attribution** (ADR 0012) — every non-blank line in a Question region must land in a
+stem, an option, an answer, an Explanation, or a recognised shared stem; anything else becomes
+an `unattributed_lines` Defect. Only `---` separators and `《以下空白》` trailers are whitelisted
+and dropped. The parser attributes every line or reports it — this rule is what surfaced the
+shared-stem and declared-Defect cases — and the corpus is at 0 `unattributed_lines`.
+
+**Declared Defects** — a Defect declared in words by the transcriber
+(`> ※ 四個選項均為程式碼圖，請對照原始 PDF。`, `〔註：…省略。〕`) is authoritative: the marker line is
+**kept in the stem, never dropped**, and marks the Question `figure_missing` directly. The
+keyword heuristic above still runs; the Defect set is the **union** of the declared 10 and the
+inferred.
+
+`unattributed_lines` joins `no_answer` and `figure_missing` as the third Defect kind.
 
 ## Annotation anchoring
 
@@ -320,7 +376,10 @@ reproducible and two Attempts of one Paper are comparable.
 **Shuffle covers Questions, never options.** Shuffled options would put the UI's letters out of
 step with the Markdown, and would invalidate all 70 official Explanations, which name their
 answer as `Ans（B）`. The accepted cost is that repeated Drills teach the position of an answer
-as well as its content; losing the official Explanations would cost more.
+as well as its content; losing the official Explanations would cost more. Folding the shared
+stem into each member Question (ADR 0011) is what keeps this safe under shuffle: a shuffled
+Question still carries its shared stem, so composition needs no special case and nothing else
+in the composition order changes.
 
 **Timing.** A Paper is timed at the official rate — 90 minutes per 50 Questions, i.e. 108 s per
 Question, scaled to the Paper's size (20 Questions → 36 minutes) so the pacing pressure is real
@@ -329,14 +388,19 @@ is **wall-clock**: closing the tab does not pause the exam, because the exam hal
 Remaining time is always computed as `limit_ms - (now - started)`, never accumulated from frame
 deltas, so a throttled or backgrounded tab cannot gain the candidate time. Reaching zero
 auto-submits.
+The countdown derives its deadline once per Attempt open (`started + limit_ms`) and re-syncs it
+from the server on `visibilitychange`; it is never recomputed while re-painting a Question
+(decision 6).
 
 **Resumption.** At most one Attempt per Paper is in flight; the portal shows it as a
 「進行中」 card. Each answer is `PUT` as it is given, so nothing is lost. Reopening after the
 limit has already elapsed submits what was answered and sets `expired`.
 
-**Grading.** Submission grades the whole Paper (mock-exam semantics, no feedback while
-sitting), writes `attempt` and `attempt_item`, reports `score = correct / total × 100` against
-the official 60-point pass line, and runs the Star lifecycle:
+**Grading.** Answers and Explanations never reach the client before submission (ADR 0013): the
+in-flight Attempt payload carries stem, options and Star state only. Submission grades the
+whole Paper (mock-exam semantics, no feedback while sitting), writes `attempt` and
+`attempt_item`, reports `score = correct / total × 100` against the official 60-point pass
+line, and runs the Star lifecycle:
 
 - a wrong answer sets `star(qkey, 'wrong')` if no Star exists;
 - a correct answer clears a `'wrong'` Star **only if the previous Attempt of that Question was
@@ -347,8 +411,9 @@ the official 60-point pass line, and runs the Star lifecycle:
 Without the clearing rule the Starred set only grows and Drill mode degenerates into the full
 corpus; with a one-correct rule a 25% guess would clear it.
 
-**Result view** lists every wrong Question with its correct option, its Explanation (official or
-authored, attribution shown), and the human's Note field; each Question has a Star toggle.
+**Result view** lists every wrong Question with its correct option and its Explanation
+(official or authored, attribution shown) — both returned by the submit response, per wrong
+Question (ADR 0013) — and the human's Note field; each Question has a Star toggle.
 
 ## Web surface
 
@@ -357,6 +422,8 @@ one — `ui-design-principles` 22; the UI is zh-TW, but the strings live in one 
 Markdown renders client-side (vendored markdown-it): required anyway, because Annotation
 anchoring operates on the rendered DOM, and server-rendering would split that logic across two
 languages.
+Every page loads the vendored `markdown-it` **before** its own module — this ordering was
+missing and broke two pages, so it is named explicitly here.
 
 Rendering the largest Material File in one pass is measured, not assumed — headless Chromium,
 vendored markdown-it, with the `data-line` stamping rule active:
@@ -375,19 +442,25 @@ the whole file renders at once and the dumbest anchoring loop is fast enough.
 (Progress bar = ticked leaf Sections / leaf Sections, Annotation count, Orphan count) and Bank
 cards (Question count, Defect count, Star count, latest score), plus an in-flight Attempt card,
 and entry points for a new Paper, a Drill, and statistics.
+A Material File that holds both Course prose and Bank regions appears in **both** lists — the
+two study guides are Course cards *and* contribute Bank cards (decision 7).
 
 **Reader (`reader.html`)** — opens any Material File. TOC with per-leaf-Section read ticks;
 selection toolbar for a 4-colour Highlight or a Note; Annotation list with an Orphan section;
 resume position; `?p=&path=&q=` deep-links scroll to the target and flash the term.
 
 **Exam (`exam.html`)** — composition form, one Question at a time with a countdown and a
-Question map, submit, result view.
+Question map, submit, result view. The in-flight payload carries stem, options and Star state
+only — the correct option and Explanation arrive with the submit response, per wrong Question
+(ADR 0013). The countdown derives its deadline once per Attempt open and re-syncs on
+`visibilitychange`, never on re-paint (decision 6).
 
 **Statistics (`stats.html`)** — five panels, ordered by what a candidate actually needs to
 decide: (1) score over time per Subject with the 60-point line; (2) pace — mean seconds per
-Question against the official 108 s; (3) most-missed Questions, top 20, linking to each
-Question; (4) per-Bank latest / best / attempts; (5) Star and Defect counts over time, where the
-Defect series doubles as content-repair progress.
+Question against the official 108 s; (3) most-missed Questions, top 20, each row linking to a
+**one-Question Drill**; (4) per-Bank latest score / best score / attempt count; (5) Star and
+Defect counts over time, where the Defect series doubles as content-repair progress (decision
+12).
 
 **Lookup (3.4)** — selecting text raises 「查課程」 and returns two tabs: **課程** (Course
 Sections) and **考古題** (Questions in Banks, excluding the current one — "how has this concept
@@ -404,8 +477,12 @@ Lookup popup; in the exam, `1`–`4`/`A`–`D` select an option, `Space` cycles 
 move between Questions, and the focused Question is always visibly unique.
 
 **Chrome and install** (`ui-design-principles` 18, 23; ADR 0008): a header carrying the app name
-and a build-stamped version, one switchable Help/About panel single-sourced from the same
-metadata, and a web manifest with `standalone` display so the site installs as its own window.
+and a build-stamped version — the string is `git describe --tags --always --dirty` on the
+skill's own repo, read once at server start, served from `GET /api/version`, falling back to
+`dev` (decision 8) — one switchable Help/About panel single-sourced from the same metadata,
+and a web manifest with `standalone` display so the site installs as its own window. The
+manifest ships **no `icons` key**: without a secure origin and a service worker the install
+prompt cannot fire, so it exists only for the home-screen name and theme colour (decision 9).
 **No service worker** — the deviation and its reasoning are recorded in ADR 0008, because the
 absence otherwise reads as an oversight.
 
@@ -436,17 +513,21 @@ desktop, a slide-over on touch.
 | `check [--root]` | the format/consistency gate; **exit 0 clean, 1 findings in the content, 2 usage or I/O failure** — the agent must be able to tell "the material needs repair" from "the tool is broken" |
 | `relink <old-relpath> <new-relpath>` | resolve a reconciliation the startup heuristic refused to guess |
 | `new course <subject> <title>` | write a Course skeleton into the Subject folder |
-| `new bank <subject> <title> [--questions N] [--shape exam\|guide]` | write a Bank skeleton in the chosen parseable shape |
+| `new bank <subject> <title> [--questions N] [--shape exam\|guide]` | write a Bank skeleton in the chosen parseable shape; placeholder stems are unique (`（第 N 題題幹）`) because identical stems collide under content-addressed identity (decision 10) |
 | `serve [--root] [--port] [--bind ADDR] [--open]` | `--bind` defaults to `127.0.0.1`; any other address requires the token (ADR 0010); prints the tokenised URL |
 | `stats [--root]` | the same five panels as text, for terminal and agent use |
 | `export [--root]` | write all user state to `.tutor/tutor.json` — diffable, mergeable, committed (ADR 0009) |
 | `import [--root] [--merge]` | rebuild the database from `tutor.json`; `--merge` unions two devices' rows instead of replacing |
 
-`check` findings: Defects by kind and Question; files holding a `第 N 題` heading that parse to
-zero Questions; Questions whose option count is not 4; a `選擇題` region with no sibling
-`解答與解析`, or a count mismatch between them; relinked and unresolvable `qkey`s; read-ticks
-whose Section path is gone; Orphan Annotations; registered-but-missing roots; a `tutor.json`
-older than the newest row in `tutor.db` (ADR 0009).
+`check` findings: Defects by kind and Question (including `unattributed_lines`); files holding a
+`第 N 題` heading that parse to zero Questions; **collapsed skeleton Questions** — a Bank whose
+parsed Question count is lower than its `第 N 題` heading count, which is what identical
+placeholder stems produce (decision 10); Questions whose option count is not 4; a `選擇題`
+region with no sibling `解答與解析`, or a count mismatch between them; **overlapping shared-stem
+spans** — two spans covering the same ordinal inside one file, which the folding lookup assumes
+never happens (the corpus's 7 spans do not overlap); relinked and unresolvable `qkey`s;
+read-ticks whose Section path is gone; Orphan Annotations; registered-but-missing roots; a
+`tutor.json` older than the newest row in `tutor.db` (ADR 0009).
 
 `serve` runs as a supervised long-lived process (`hub` with a port readiness check), reports
 `http://127.0.0.1:<port>/`, and does not block the session that started it.
@@ -461,7 +542,7 @@ No crawler is written. `SKILL.md` drives three content jobs, all judgement work:
 2. **Backfill a `figure_missing` Defect** — the authoritative source is local: the original PDF
    sits in `source/` beside the Markdown. Transcribe a code listing into a fenced block, a table
    into a Markdown table; for a genuine diagram, describe it and say that it is a description.
-   Re-run `check` and watch the Defect count fall. 23 Questions, most of them the Python
+   Re-run `check` and watch the Defect count fall. 25 Questions, most of them the Python
    code-reading type.
 3. **Author an Explanation** — on request, for Questions answered wrong in an exam-paper Bank,
    with the AI-generated attribution (ADR 0005), imitating the register of the 70 official
@@ -484,7 +565,10 @@ English equivalents (review, mock exam, drill, study progress).
 
 1. `tests/test_parser.py` against the eight real Material Files:
    - 270 Questions in 11 Banks; 4 options each; 200 from `exam` shape, 70 from `guide` shape;
-   - 3 `no_answer`, 23 `figure_missing`, all 26 inside exam papers, zero in the guides;
+   - 3 `no_answer`, 25 `figure_missing`, all 28 inside exam papers, zero in the guides;
+   - **18 folded Questions (題組), each rendering its shared stem as the
+     `> **共用題幹（第…題）**` blockquote;**
+   - **0 `unattributed_lines` across all eight files;**
    - 70 Explanations parsed with `origin='official'`;
    - the two cheatsheets parse to zero Questions (strict-pattern regression);
    - zero Section-path collisions across all eight files;
@@ -507,6 +591,11 @@ English equivalents (review, mock exam, drill, study progress).
    - confirm a Drill contains exactly the Starred Questions and no defective one;
    - confirm a 20-Question Paper counts down 36 minutes, survives a browser restart mid-Attempt
      with the countdown still falling, and auto-submits at zero;
+   - confirm the countdown survives three Question changes without resetting, and re-syncs from
+     the server on `visibilitychange` (decision 6);
+   - confirm the in-flight Attempt payload carries stem, options and Star state only — the
+     correct option and Explanation are absent until `submit` returns them per wrong Question
+     (ADR 0013);
    - select a phrase in a Question, confirm the 課程 tab lists a matching 學習指引 Section, the
      考古題 tab lists other Questions on the same concept, and the new window scrolls to it;
    - tick a leaf Section, confirm the portal's Progress bar moves by exactly 1/57 for 科目1;
@@ -517,7 +606,7 @@ English equivalents (review, mock exam, drill, study progress).
      (ADR 0010's fallback triggers above it);
    - `export`, delete the database, `import`, confirm every Star, Annotation, Note and Attempt
      returns byte-identical (ADR 0009).
-4. `check` exits 1 on the current corpus (26 Defects) and 0 once they are Backfilled; exits 2
+4. `check` exits 1 on the current corpus (28 Defects) and 0 once they are Backfilled; exits 2
    for an unregistered root — the three-level contract is proven, not assumed.
 
 ## Decisions
@@ -532,7 +621,7 @@ English equivalents (review, mock exam, drill, study progress).
 | User-state-only database, catalogue in memory (ADR 0001) | one combined database; state + gitignored cache | deletes the `index` command, the cache, its invalidation, and a 1 MB binary blob per commit |
 | Content-addressed Question identity (ADR 0002) | path keys; hash-only keys | the Materials Root has already done a mass rename; OCR typo fixes must not cost review history |
 | Device-local registry (ADR 0003) | committed `config.json`; walk up from cwd | an absolute path inside a synced repo is wrong on the second device; agent sessions run outside the root |
-| Defects excluded by default (ADR 0004) | catalogue everything | 23 of 200 exam Questions silently lack their figure; most are the Python code-reading type |
+| Defects excluded by default (ADR 0004) | catalogue everything | 25 of 200 exam Questions silently lack their figure; most are the Python code-reading type |
 | Explanations in content, Notes in state (ADR 0005) | both in the database | Explanations must be Lookup-able, diffable, synced; Notes are private |
 | Bank is a region (ADR 0006) | ignore the guides' practice Questions; extract them to new files | +70 defect-free Questions and the only 70 official Explanations, without duplicating official content |
 | Ancestor-path Section identity (ADR 0007) | counter-deduplicated slugs | one heading repeats 12 times; a counter moves read-ticks when a chapter is inserted |
@@ -552,3 +641,9 @@ English equivalents (review, mock exam, drill, study progress).
 | Touch hosts over a private network, behind a token (ADR 0010) | loopback only; open LAN bind with no token | the human studies on a phone on a private virtual network; the token stops another device on it from reading study state |
 | Per-host components for selection, Lookup and columns | media queries over desktop chrome | the OS selection handles and the absence of hover are behaviour, not width (`ui-design-principles` 2, whose common-mistake row records this being tried and reverted) |
 | No TLS in the engine | self-signed certificates; a bundled cert | the tunnel already offers HTTPS (`tailscale serve`); self-signed certs on a phone are a trust-store fight with no payoff |
+| Shared stem folded into every member Question (ADR 0011) | a first-class `Stimulus` entity; exclude the 18 Questions as a Defect | a Stimulus breaks the "Question is self-contained" invariant across five components; excluding them throws away 9% of the exam pool for a problem the corpus already solved in prose |
+| A transcriber's declared Defect is authoritative; the marker stays in the stem | drop the marker line; declared-only counts | the Defect set is the union of declared ∪ inferred; two Questions (114-科3 第45題, 第47題) are reachable only via the declaration |
+| Attribute every line or report it as `unattributed_lines` (ADR 0012) | silently drop unrecognised lines | dropped lines lose content invisibly; this rule is what surfaced the shared-stem and declared-Defect cases (0 in the corpus) |
+| Answers and Explanations arrive only with the submit response (ADR 0013) | ship them in the in-flight payload | mock-exam semantics; no answer key leaks before grading |
+| Countdown: deadline once per Attempt open, re-sync on `visibilitychange`, never on re-paint | recompute on every Question paint | a re-paint is not a clock event; recomputing drifts |
+| Manifest ships no `icons` key | ship icons for install richness | without a secure origin and a service worker the install prompt cannot fire; icons would be dead weight |

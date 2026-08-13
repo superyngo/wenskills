@@ -4,11 +4,11 @@
 
 **Goal:** Build the `wens-tutor` skill — a stdlib-only Python engine plus a vanilla-JS site that turns a Markdown courseware tree into a study site with persistent annotations, timed mock papers, wrong-answer drilling, and cross-referencing lookup.
 
-**Architecture:** One process mounts two static roots (engine from the skill, content from the Materials Root) and serves JSON from a SQLite file holding *only* user state; content facts are parsed into an in-memory attached database at every start, so there is no index step and no cache. Question identity is a content hash, Section identity is a heading ancestor path, so user state survives file renames and chapter insertions.
+**Architecture:** One process mounts two static roots (engine from the skill, content from the Materials Root) and serves JSON from a SQLite file holding *only* user state; content facts are parsed into an in-memory attached database at every start, so there is no index step and no cache. Question identity is a content hash, Section identity is a heading ancestor path, so user state survives file renames and chapter insertions; a Slot record (Bank, ordinal) survives an edit to the Question's own text. A Question is always answerable alone — a 題組's shared stem is folded into every member (ADR 0011) — and the parser reports any line it cannot place rather than dropping it (ADR 0012).
 
 **Tech Stack:** Python ≥3.9 stdlib only (`http.server`, `sqlite3`, `hashlib`, `unicodedata`, `hmac`, `json`, `argparse`, `re`); vanilla ES modules; vendored `markdown-it` (single file, no npm, no build); `unittest` for tests.
 
-**Design authority:** `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`. Domain vocabulary: `skills/wens-tutor/CONTEXT.md`. Decisions: `skills/wens-tutor/docs/adr/0001…0010` — read 0001, 0002, 0006, 0007 before Task 1; 0004 and 0005 before Task 3; 0009 before Task 9; 0010 before Task 12.
+**Design authority:** `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`. Domain vocabulary: `skills/wens-tutor/CONTEXT.md`. Decisions: `skills/wens-tutor/docs/adr/0001…0013` — read 0001, 0002, 0006, 0007 before Task 1; **0011 and 0012 before Task 2**; 0004 and 0005 before Task 3; 0002 again before Task 5 (the Slot record); **0013 before Task 8**; 0009 before Task 9; 0010 before Task 12.
 
 ## Global Constraints
 
@@ -18,7 +18,7 @@
 - The Materials Root for all testing is `~/repos/wenswiki/wenswiki/work/平台/2026_AI應用規劃師`. Never modify a file inside it during implementation; never `git push` the wenswiki vault.
 - All user-state keys are natural and stable: `qkey` (content hash), `fid` (minted file id), Section ancestor `path`. Never a rowid, never a relpath, never an occurrence counter.
 - User-facing strings live in `web/strings.js` only. No inline literals in HTML or JS.
-- Ground-truth numbers that tests assert: 270 Questions, 11 Banks, 200 `exam`-shape + 70 `guide`-shape, 3 `no_answer`, 23 `figure_missing`, 70 official Explanations, 0 Questions in the two cheatsheets, 0 Section-path collisions across 8 files, 57 leaf Sections in the 科目1 guide.
+- Ground-truth numbers that tests assert (re-measured 2026-08-13 with the accepted parser rules; every one of them was produced by running the parser in Tasks 1–3 against the real corpus, not estimated): 270 Questions, 11 Banks, 200 `exam`-shape + 70 `guide`-shape, 0 multi-answer, 3 `no_answer`, **25 `figure_missing`** (18 declared ∪ 24 inferred), 0 `unattributed_lines`, **28 Defects total**, **18 Questions carrying a folded shared stem over 7 spans**, 70 official Explanations, 0 Questions in the two cheatsheets, 0 Section-path collisions across 8 files, 57 leaf Sections in the 科目1 guide, 270 unique `qkey`s stable across two parses.
 - Commit after every task with a conventional-commit message. Append a CHANGELOG `Unreleased` entry in the final task only (one entry for the feature, per repo CLAUDE.md).
 
 ---
@@ -235,11 +235,16 @@ git commit -m "feat(wens-tutor): parse Sections with ancestor-path identity"
 
 **Interfaces:**
 - Consumes: `parse_sections`, `slugify` from Task 1.
-- Produces: `Question(qkey, ordinal, type, stem_md, options, answer, explanation_md, explanation_origin)`; `Bank(path, title, shape, questions)`; `qkey_for(stem_md, options) -> str`; `parse_exam_bank(md: str) -> Bank | None`.
+- Produces: `Question(qkey, ordinal, type, stem_md, options, answer, explanation_md, explanation_origin, shared_span, declared_defect, unattributed)`; `Bank(path, title, shape, questions)`; `qkey_for(stem_md, options) -> str`; `find_shared_stems(lines) -> (dict, set)`; `shared_for(shared, ordinal) -> (span, text)`; `fold_shared(span, text, stem_md) -> str`; `split_block(lines) -> tuple`; `parse_exam_bank(md: str) -> Bank | None`.
 
 - [ ] **Step 1: Write the failing test**
 
-```python
+The fixture carries, deliberately, every shape the real papers use: a fenced stem whose `(A)` is
+not an option, an unparseable answer placeholder, an authored Explanation, a `（題組）` heading
+shared stem, a `共用題幹` blockquote shared stem, and a declared-Defect marker sitting *after* the
+options.
+
+````python
 EXAM = """# 115年第一次 公告試題
 
 ## 一、選擇題
@@ -261,9 +266,6 @@ EXAM = """# 115年第一次 公告試題
 
 以下程式碼中(A)應填入何者？
 
-- tool_a
-- tool_b
-
 ```
 code line
 (A) not an option
@@ -274,11 +276,53 @@ code line
 (C) 丙;
 (D) 丁
 
+> ※ 本題附有程式碼圖，請對照原始 PDF。
+
 **解析（AI 生成，未經官方確認）：**
 
 因為如此。
 
 ---
+
+## 第 3～4 題（題組）
+
+下圖為某資料集的分佈，請根據此圖回答第 3～4 題。
+
+### 第 3 題
+
+**答案：A**
+
+此分佈最接近何者?
+
+(A) 常態;
+(B) 均勻;
+(C) 偏態;
+(D) 雙峰
+
+### 第 4 題
+
+**答案：B**
+
+若移除離群值，何者改變最大?
+
+(A) 中位數;
+(B) 標準差;
+(C) 眾數;
+(D) 四分位距
+
+> 以下第5~5 題共用題幹：
+> 〔註：原題附有 PCA 降噪程式碼圖，於此省略。〕
+
+### 第 5 題
+
+**答案：C**
+
+此步驟的目的為何?
+
+(A) 甲;
+(B) 乙;
+(C) 丙;
+(D) 丁
 
 《以下空白》
 """
@@ -287,36 +331,68 @@ code line
 class TestExamBank(unittest.TestCase):
     def setUp(self):
         self.bank = parser.parse_exam_bank(EXAM)
+        self.q = {q.ordinal: q for q in self.bank.questions}
 
-    def test_two_questions_four_options_each(self):
+    def test_five_questions_four_options_each(self):
         self.assertEqual(self.bank.shape, "exam")
-        self.assertEqual(len(self.bank.questions), 2)
+        self.assertEqual(len(self.bank.questions), 5)
         for q in self.bank.questions:
             self.assertEqual(len(q.options), 4)
 
     def test_answer_and_missing_answer(self):
-        self.assertEqual(self.bank.questions[0].answer, "D")
-        self.assertIsNone(self.bank.questions[1].answer)
+        self.assertEqual(self.q[1].answer, "D")
+        self.assertIsNone(self.q[2].answer)
 
     def test_fenced_lines_stay_in_stem_and_are_not_options(self):
-        q = self.bank.questions[1]
-        self.assertIn("code line", q.stem_md)
-        self.assertIn("(A) not an option", q.stem_md)
-        self.assertEqual(q.options[0][1], "甲")
+        self.assertIn("code line", self.q[2].stem_md)
+        self.assertIn("(A) not an option", self.q[2].stem_md)
+        self.assertEqual(self.q[2].options[0][1], "甲")
 
     def test_trailers_dropped_and_explanation_captured(self):
-        q = self.bank.questions[1]
-        self.assertNotIn("以下空白", q.stem_md)
-        self.assertEqual(q.explanation_origin, "authored")
-        self.assertIn("因為如此", q.explanation_md)
+        self.assertNotIn("以下空白", self.q[5].stem_md)
+        self.assertEqual(self.q[2].explanation_origin, "authored")
+        self.assertIn("因為如此", self.q[2].explanation_md)
 
-    def test_qkey_is_stable_and_content_addressed(self):
+    def test_declared_marker_is_kept_not_dropped(self):
+        self.assertIn("請對照原始 PDF", self.q[2].stem_md)
+        self.assertTrue(self.q[2].declared_defect)
+        self.assertEqual(self.q[2].unattributed, [])
+
+    def test_nothing_is_left_unattributed(self):
+        for q in self.bank.questions:
+            self.assertEqual(q.unattributed, [], f"第{q.ordinal}題")
+
+    def test_heading_shared_stem_is_folded_into_both_members(self):
+        for ordinal in (3, 4):
+            self.assertEqual(self.q[ordinal].shared_span, (3, 4))
+            self.assertIn("共用題幹（第3～4題）", self.q[ordinal].stem_md)
+            self.assertIn("下圖為某資料集的分佈", self.q[ordinal].stem_md)
+        self.assertIn("此分佈最接近何者", self.q[3].stem_md)
+        self.assertIn("若移除離群值", self.q[4].stem_md)
+
+    def test_blockquote_shared_stem_is_folded_and_its_lines_consumed(self):
+        self.assertEqual(self.q[5].shared_span, (5, 5))
+        self.assertIn("PCA 降噪程式碼圖", self.q[5].stem_md)
+        self.assertTrue(self.q[5].declared_defect)
+        # the blockquote sat in 第 4 題's region but belongs to 第 5 題: consumed, not leaked
+        self.assertEqual(self.q[4].shared_span, (3, 4))
+        self.assertNotIn("PCA 降噪", self.q[4].stem_md)
+        self.assertEqual(self.q[4].unattributed, [])
+
+    def test_unattributed_line_is_reported(self):
+        broken = EXAM.replace("(D) 丁\n\n《以下空白》", "(D) 丁\n\n沒人認領的一行\n\n《以下空白》")
+        q5 = parser.parse_exam_bank(broken).questions[-1]
+        self.assertEqual(q5.unattributed, ["沒人認領的一行"])
+
+    def test_qkey_is_stable_content_addressed_and_covers_the_shared_stem(self):
         again = parser.parse_exam_bank(EXAM)
-        self.assertEqual(
-            [q.qkey for q in self.bank.questions], [q.qkey for q in again.questions]
-        )
-        self.assertEqual(len(self.bank.questions[0].qkey), 12)
-```
+        self.assertEqual([q.qkey for q in self.bank.questions], [q.qkey for q in again.questions])
+        self.assertEqual(len(self.q[1].qkey), 12)
+        without = EXAM.replace("下圖為某資料集的分佈，請根據此圖回答第 3～4 題。", "另一段完全不同的共用題幹。")
+        moved = {q.ordinal: q.qkey for q in parser.parse_exam_bank(without).questions}
+        self.assertNotEqual(moved[3], self.q[3].qkey)
+        self.assertEqual(moved[1], self.q[1].qkey)
+````
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -325,17 +401,24 @@ Expected: FAIL — `AttributeError: module 'tutorlib.parser' has no attribute 'p
 
 - [ ] **Step 3: Write minimal implementation**
 
-Add to `parser.py`:
+Add to `parser.py`. Two rules earn their own functions here: a Shared Stem is folded into every
+member (ADR 0011), and `split_block` accounts for every line it is given (ADR 0012).
 
 ```python
 import hashlib
 
 QHEAD = re.compile(r"^###[ \t]*第[ \t]*(\d+)[ \t]*題[ \t]*$")
+GROUP_HEAD = re.compile(r"^##[ \t]*第[ \t]*(\d+)[ \t]*[～~－-][ \t]*(\d+)[ \t]*題")
+GROUP_QUOTE = re.compile(r"以下第[ \t]*(\d+)[ \t]*[～~－-][ \t]*(\d+)[ \t]*題共用題幹[：:]?[ \t]*(.*)$")
 ANSWER = re.compile(r"^\*\*答案[：:]\s*([A-E]+)")
+ANSWER_ANY = re.compile(r"^\*\*答案[：:]")
 OPTION = re.compile(r"^\(([A-E])\)\s*(.+?);?\s*$")
 EXPL_HEAD = re.compile(r"^\*\*解析.*[：:]\*\*\s*$")
-TRAILER = re.compile(r"^(-{3,}|《以下空白》|\s*)$")
+TRAILER = re.compile(r"^(-{3,}|《以下空白》)\s*$")
 FENCE = re.compile(r"^\s*```")
+# Three conventions, all authoritative: the transcriber saying the figure is gone.
+DECLARED = re.compile(r"※[^\n]*(圖|表|程式|PDF)|〔註[^〕]*(省略|圖)[^〕]*〕|請對照原始\s*PDF|見原始\s*P")
+SHARED_STEM_LABEL = "共用題幹"
 
 
 class Question(NamedTuple):
@@ -347,6 +430,9 @@ class Question(NamedTuple):
     answer: str                  # None when unpublished
     explanation_md: str
     explanation_origin: str      # 'official' | 'authored' | None
+    shared_span: tuple           # (lo, hi) when a Shared Stem was folded in, else None
+    declared_defect: bool        # the content says its figure is missing
+    unattributed: List[str]      # lines the parser could not place (ADR 0012)
 
 
 class Bank(NamedTuple):
@@ -363,45 +449,86 @@ def qkey_for(stem_md: str, options: List[tuple]) -> str:
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:12]
 
 
-def _split_question_block(block_lines):
-    """Return (stem_md, options, answer, explanation_md, explanation_origin)."""
-    answer = None
-    stem, options, expl = [], [], []
-    in_fence = False
-    mode = "stem"
-    for line in block_lines:
-        if FENCE.match(line):
-            in_fence = not in_fence
-            stem.append(line)
+def find_shared_stems(lines):
+    """({(lo, hi): text}, consumed_line_indices) — both transcription conventions."""
+    out, consumed = {}, set()
+    for i, line in enumerate(lines):
+        m = GROUP_QUOTE.search(line)
+        if m:
+            lo, hi = int(m.group(1)), int(m.group(2))
+            body = [m.group(3).strip()]
+            consumed.add(i)
+            for j in range(i + 1, len(lines)):
+                s = lines[j].lstrip()
+                if not s.startswith(">"):
+                    break
+                body.append(s.lstrip(">").strip())
+                consumed.add(j)
+            out[(lo, hi)] = "\n".join(x for x in body if x)
             continue
-        if not in_fence:
+        m = GROUP_HEAD.match(line)
+        if m:
+            lo, hi = int(m.group(1)), int(m.group(2))
+            body = []
+            for j in range(i + 1, len(lines)):
+                if QHEAD.match(lines[j]) or lines[j].startswith("## "):
+                    break
+                body.append(lines[j])
+            text = re.sub(r"\n?(-{3,}|《以下空白》)\s*$", "", "\n".join(body).strip()).strip()
+            if text:
+                out[(lo, hi)] = text
+    return out, consumed
+
+
+def shared_for(shared, ordinal):
+    """First covering span. Unambiguous only while spans do not overlap — `check` enforces that."""
+    for span, text in sorted(shared.items()):
+        if span[0] <= ordinal <= span[1]:
+            return span, text
+    return None, None
+
+
+def fold_shared(shared_span, shared_text: str, stem_md: str) -> str:
+    quoted = shared_text.replace("\n", "\n> ")
+    header = "> **%s（第%d～%d題）**" % (SHARED_STEM_LABEL, shared_span[0], shared_span[1])
+    return "%s\n> %s\n\n%s" % (header, quoted, stem_md)
+
+
+def split_block(block_lines):
+    """(stem, options, answer, explanation, unattributed) — every line is accounted for."""
+    answer, stem, options, expl, extra, notes = None, [], [], [], [], []
+    in_fence, mode = False, "stem"
+    for line in block_lines:
+        if FENCE.match(line) or in_fence:
+            if FENCE.match(line):
+                in_fence = not in_fence
+            (expl if mode == "expl" else stem).append(line)
+            continue
+        if ANSWER_ANY.match(line):
             m = ANSWER.match(line)
-            if m and answer is None and mode == "stem":
-                answer = m.group(1)
-                continue
-            if line.startswith("**答案") and answer is None and mode == "stem":
-                continue  # unparseable placeholder -> stays None
-            if EXPL_HEAD.match(line):
-                mode = "expl"
-                continue
-            m = OPTION.match(line)
-            if m and mode in ("stem", "options"):
-                mode = "options"
-                options.append((m.group(1), m.group(2).strip()))
-                continue
+            if m and answer is None:
+                answer = m.group(1)          # unparseable placeholder leaves it None
+            continue
+        if EXPL_HEAD.match(line):
+            mode = "expl"
+            continue
+        m = OPTION.match(line)
+        if m and mode in ("stem", "options"):
+            mode = "options"
+            options.append((m.group(1), m.group(2).strip()))
+            continue
         if mode == "expl":
             expl.append(line)
         elif mode == "stem":
             stem.append(line)
-
-    def clean(ls):
-        out = [l for l in ls if not TRAILER.match(l)] if ls else []
-        return "\n".join(ls).strip() if out else ""
-
-    stem_md = "\n".join(stem).strip()
-    stem_md = re.sub(r"\n?(-{3,}|《以下空白》)\s*$", "", stem_md).strip()
-    expl_md = "\n".join(expl).strip()
-    return stem_md, options, answer, expl_md, ("authored" if expl_md else None)
+        elif DECLARED.search(line):
+            notes.append(line.strip())       # a declaration after the options is still content
+        elif line.strip() and not TRAILER.match(line):
+            extra.append(line.strip())
+    stem_md = re.sub(r"\n?(-{3,}|《以下空白》)\s*$", "", "\n".join(stem).strip()).strip()
+    if notes:
+        stem_md = (stem_md + "\n\n" + "\n".join(notes)).strip()
+    return stem_md, options, answer, "\n".join(expl).strip(), extra
 
 
 def parse_exam_bank(md: str, path: str = "", title: str = "") -> Bank:
@@ -409,35 +536,40 @@ def parse_exam_bank(md: str, path: str = "", title: str = "") -> Bank:
     starts = [i for i, l in enumerate(lines) if QHEAD.match(l)]
     if not starts:
         return None
+    shared, consumed = find_shared_stems(lines)
     questions = []
     for n, i in enumerate(starts):
         end = starts[n + 1] if n + 1 < len(starts) else len(lines)
-        # a following '##' heading ends the bank region too
-        for j in range(i + 1, end):
+        for j in range(i + 1, end):           # a following '##' heading ends the region too
             if lines[j].startswith("## "):
                 end = j
                 break
         ordinal = int(QHEAD.match(lines[i]).group(1))
-        stem, options, answer, expl, origin = _split_question_block(lines[i + 1 : end])
-        questions.append(
-            Question(
-                qkey=qkey_for(stem, options),
-                ordinal=ordinal,
-                type="multi" if answer and len(answer) > 1 else "single",
-                stem_md=stem,
-                options=options,
-                answer=answer,
-                explanation_md=expl,
-                explanation_origin=origin,
-            )
-        )
+        block = [l for k, l in enumerate(lines[i + 1:end], start=i + 1) if k not in consumed]
+        stem, options, answer, expl, extra = split_block(block)
+        span, shared_text = shared_for(shared, ordinal)
+        if shared_text:
+            stem = fold_shared(span, shared_text, stem)
+        questions.append(Question(
+            qkey=qkey_for(stem, options),     # folding happens first: identity covers the preamble
+            ordinal=ordinal,
+            type="multi" if answer and len(answer) > 1 else "single",
+            stem_md=stem,
+            options=options,
+            answer=answer,
+            explanation_md=expl,
+            explanation_origin="authored" if expl else None,
+            shared_span=span,
+            declared_defect=bool(DECLARED.search(stem)),
+            unattributed=extra,
+        ))
     return Bank(path=path, title=title, shape="exam", questions=questions)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_parser.TestExamBank -v`
-Expected: PASS (5 tests)
+Expected: PASS (10 tests)
 
 - [ ] **Step 5: Add the real-corpus assertions and run**
 
@@ -467,10 +599,52 @@ class TestRealExamBanks(unittest.TestCase):
             if b:
                 missing += sum(1 for q in b.questions if q.answer is None)
         self.assertEqual(missing, 3)
+
+    def test_eighteen_questions_carry_a_folded_shared_stem(self):
+        folded, spans = [], set()
+        for p in material_files():
+            b = parser.parse_exam_bank(p.read_text(encoding="utf-8"))
+            if not b:
+                continue
+            for q in b.questions:
+                if q.shared_span:
+                    folded.append((p.name, q.ordinal))
+                    spans.add((p.name, q.shared_span))
+                    self.assertIn(parser.SHARED_STEM_LABEL, q.stem_md)
+        self.assertEqual(len(folded), 18)
+        self.assertEqual(len(spans), 7)
+        # both 科目3 papers, nine Questions each, by two different conventions
+        per_file = {name for name, _ in folded}
+        self.assertEqual(len(per_file), 2)
+
+    def test_no_line_is_left_unattributed_anywhere(self):
+        orphans = []
+        for p in material_files():
+            b = parser.parse_exam_bank(p.read_text(encoding="utf-8"))
+            if b:
+                orphans += [(p.name, q.ordinal, q.unattributed) for q in b.questions if q.unattributed]
+        self.assertEqual(orphans, [])
+
+    def test_eighteen_questions_declare_their_own_defect(self):
+        declared = sum(
+            1
+            for p in material_files()
+            for b in [parser.parse_exam_bank(p.read_text(encoding="utf-8"))]
+            if b
+            for q in b.questions
+            if q.declared_defect
+        )
+        self.assertEqual(declared, 18)
+
+    def test_shared_stem_spans_never_overlap_inside_a_file(self):
+        for p in material_files():
+            spans = sorted(parser.find_shared_stems(p.read_text(encoding="utf-8").splitlines())[0])
+            for a, b in zip(spans, spans[1:]):
+                self.assertGreater(b[0], a[1], f"{p.name} {a} vs {b}")
 ```
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_parser -v`
-Expected: PASS (13 tests)
+Expected: PASS (22 tests)
 
 - [ ] **Step 6: Commit**
 
@@ -561,7 +735,7 @@ Add to `parser.py`:
 
 ```python
 GUIDE_Q = re.compile(r"^(\d+)\.\s+(.*)$")
-GUIDE_OPT = re.compile(r"^\s+-\s*[（(]([A-E])[)）]\s*(.+?)\s*$")
+GUIDE_OPT = re.compile(r"^\s*-\s*[（(]([A-E])[)）]\s*(.+?)\s*$")
 GUIDE_ANS = re.compile(r"^\*\*(\d+)\.\s*Ans[（(]([A-E])[)）]\s*(.*?)\*\*\s*$")
 GUIDE_EXPL = re.compile(r"^解析[：:]\s*(.*)$")
 FIGURE_REF = re.compile(
@@ -628,6 +802,9 @@ def parse_guide_banks(md: str) -> List[Bank]:
                     answer=letter,
                     explanation_md=expl,
                     explanation_origin="official" if expl else None,
+                    shared_span=None,          # guides never use 題組
+                    declared_defect=bool(DECLARED.search(stem)),
+                    unattributed=[],           # a guide region has no post-option prose
                 )
             )
         banks.append(Bank(path=sec.path, title=sec.title, shape="guide", questions=questions))
@@ -640,8 +817,11 @@ def defects_for(q: Question) -> List[str]:
         out.append("no_answer")
     blob = q.stem_md + "\n" + "\n".join(t for _, t in q.options)
     has_artifact = "```" in blob or TABLE_ROW.search(blob) or "![" in blob
-    if FIGURE_REF.search(blob) and not has_artifact:
+    # Declared beats inferred: the content saying so is authoritative (ADR 0012).
+    if q.declared_defect or (FIGURE_REF.search(blob) and not has_artifact):
         out.append("figure_missing")
+    if q.unattributed:
+        out.append("unattributed_lines")
     return out
 
 
@@ -649,7 +829,7 @@ def parse_file(md: str):
     sections = parse_sections(md)
     exam = parse_exam_bank(md)
     if exam:
-        return sections, [exam._replace(path="", title="")]
+        return sections, [exam]
     return sections, parse_guide_banks(md)
 ```
 
@@ -671,13 +851,31 @@ class TestCorpusTotals(unittest.TestCase):
                 questions += b.questions
         self.assertEqual(len(banks), 11)
         self.assertEqual(len(questions), 270)
+        self.assertEqual(len({q.qkey for q in questions}), 270)
         self.assertEqual(sum(1 for b in banks if b.shape == "exam"), 4)
         self.assertEqual(sum(len(b.questions) for b in banks if b.shape == "guide"), 70)
+        self.assertEqual(sum(1 for q in questions if q.type == "multi"), 0)
         kinds = [k for q in questions for k in parser.defects_for(q)]
         self.assertEqual(kinds.count("no_answer"), 3)
-        self.assertEqual(kinds.count("figure_missing"), 23)
+        self.assertEqual(kinds.count("figure_missing"), 25)
+        self.assertEqual(kinds.count("unattributed_lines"), 0)
+        self.assertEqual(len(kinds), 28)
         official = [q for q in questions if q.explanation_origin == "official"]
         self.assertEqual(len(official), 70)
+
+    def test_declared_and_inferred_provenance(self):
+        declared = inferred = union = 0
+        for p in material_files():
+            _, bs = parser.parse_file(p.read_text(encoding="utf-8"))
+            for b in bs:
+                for q in b.questions:
+                    blob = q.stem_md + "\n" + "\n".join(t for _, t in q.options)
+                    artifact = "```" in blob or parser.TABLE_ROW.search(blob) or "![" in blob
+                    inf = bool(parser.FIGURE_REF.search(blob)) and not artifact
+                    declared += 1 if q.declared_defect else 0
+                    inferred += 1 if inf else 0
+                    union += 1 if (q.declared_defect or inf) else 0
+        self.assertEqual((declared, inferred, union), (18, 24, 25))
 
     def test_guide_defects_are_zero(self):
         for p in material_files():
@@ -687,9 +885,6 @@ class TestCorpusTotals(unittest.TestCase):
                     for q in b.questions:
                         self.assertEqual(parser.defects_for(q), [], f"{p.name} {q.ordinal}")
 ```
-
-Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_parser -v`
-Expected: PASS (19 tests). If `figure_missing` is not exactly 23, print the offending Questions and reconcile against the spec's Ground-truth table before changing the heuristic — the spec's number was measured, not guessed.
 
 - [ ] **Step 6: Commit**
 
@@ -714,10 +909,15 @@ git commit -m "feat(wens-tutor): parse guide-shape Banks and detect Defects"
 
 ```python
 # skills/wens-tutor/tests/test_rules.py
+import json
+import os
 import sqlite3
 import sys
 import unittest
 from pathlib import Path
+
+# Keep the device registry out of the real config while testing (ADR 0003).
+os.environ.setdefault("WENS_TUTOR_CONFIG", "/tmp/wens-tutor-tests.json")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from tutorlib import catalog  # noqa: E402
@@ -733,7 +933,16 @@ class TestCatalogue(unittest.TestCase):
         self.assertEqual(conn.execute("SELECT count(*) FROM cat.question").fetchone()[0], 270)
         self.assertEqual(
             conn.execute("SELECT count(*) FROM cat.defect WHERE kind='figure_missing'").fetchone()[0],
-            23,
+            25,
+        )
+        self.assertEqual(conn.execute("SELECT count(*) FROM cat.defect").fetchone()[0], 28)
+        self.assertEqual(
+            conn.execute("SELECT count(*) FROM cat.question WHERE shared_span IS NOT NULL").fetchone()[0],
+            18,
+        )
+        self.assertEqual(
+            conn.execute("SELECT count(*) FROM cat.question WHERE declared_defect=1").fetchone()[0],
+            18,
         )
 
     def test_subject_comes_from_the_first_path_segment(self):
@@ -768,7 +977,8 @@ CREATE TABLE cat.section(fid TEXT, path TEXT, level INT, title TEXT, is_leaf INT
 CREATE TABLE cat.bank(bkey TEXT PRIMARY KEY, fid TEXT, path TEXT, title TEXT, shape TEXT);
 CREATE TABLE cat.question(qkey TEXT PRIMARY KEY, bkey TEXT, ordinal INT, type TEXT,
                           stem_md TEXT, options_json TEXT, answer TEXT,
-                          explanation_md TEXT, explanation_origin TEXT);
+                          explanation_md TEXT, explanation_origin TEXT,
+                          shared_span TEXT, declared_defect INT);
 CREATE TABLE cat.defect(qkey TEXT, kind TEXT);
 CREATE INDEX cat.i_sec ON section(fid, path);
 CREATE INDEX cat.i_q ON question(bkey);
@@ -823,7 +1033,7 @@ def build(conn: sqlite3.Connection, root: Path, fid_for=None) -> None:
             )
             for q in b.questions:
                 conn.execute(
-                    "INSERT OR IGNORE INTO cat.question VALUES (?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR IGNORE INTO cat.question VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         q.qkey,
                         bkey,
@@ -834,6 +1044,8 @@ def build(conn: sqlite3.Connection, root: Path, fid_for=None) -> None:
                         q.answer,
                         q.explanation_md,
                         q.explanation_origin,
+                        "%d-%d" % q.shared_span if q.shared_span else None,
+                        1 if q.declared_defect else 0,
                     ),
                 )
                 conn.executemany(
@@ -886,22 +1098,35 @@ import tempfile
 from tutorlib import state  # noqa: E402
 
 
+def bank_md(stems):
+    """A Bank of len(stems) Questions. Three is the minimum that makes a relink test real:
+    with one Question, any 'find the single free slot' guess resolves by luck."""
+    return "".join(
+        "### 第 %d 題\n\n**答案：A**\n\n%s\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n\n" % (i, stem)
+        for i, stem in enumerate(stems, start=1)
+    )
+
+
 class TestFidReconciliation(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         (self.tmp / "科目A").mkdir()
         self.f = self.tmp / "科目A" / "bank.md"
-        self.f.write_text(
-            "### 第 1 題\n\n**答案：A**\n\n題幹一\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n",
-            encoding="utf-8",
-        )
+        self.f.write_text(bank_md(["題幹一", "題幹二", "題幹三"]), encoding="utf-8")
 
     def tearDown(self):
         shutil.rmtree(self.tmp)
 
+    def qkeys(self):
+        conn = state.open_root(self.tmp)
+        try:
+            return [r[0] for r in conn.execute("SELECT qkey FROM cat.question ORDER BY ordinal")]
+        finally:
+            conn.close()
+
     def test_star_survives_a_file_rename(self):
         conn = state.open_root(self.tmp)
-        qkey = conn.execute("SELECT qkey FROM cat.question").fetchone()[0]
+        qkey = conn.execute("SELECT qkey FROM cat.question ORDER BY ordinal").fetchone()[0]
         conn.execute("INSERT INTO star VALUES (?,'manual',0)", (qkey,))
         conn.commit()
         conn.close()
@@ -913,6 +1138,7 @@ class TestFidReconciliation(unittest.TestCase):
             "SELECT count(*) FROM star s JOIN cat.question q ON q.qkey = s.qkey"
         ).fetchone()[0]
         self.assertEqual(joined, 1)
+        conn.close()
 
     def test_progress_follows_the_file_via_fid(self):
         conn = state.open_root(self.tmp)
@@ -922,24 +1148,51 @@ class TestFidReconciliation(unittest.TestCase):
         conn.close()
         self.f.rename(self.f.with_name("renamed2.md"))
         conn = state.open_root(self.tmp)
-        fid2 = conn.execute("SELECT fid FROM cat.file").fetchone()[0]
-        self.assertEqual(fid, fid2)
+        self.assertEqual(conn.execute("SELECT fid FROM cat.file").fetchone()[0], fid)
+        conn.close()
 
-    def test_stem_edit_relinks_the_qkey(self):
+    def test_slots_are_recorded_for_every_question(self):
         conn = state.open_root(self.tmp)
-        old = conn.execute("SELECT qkey FROM cat.question").fetchone()[0]
-        conn.execute("INSERT INTO star VALUES (?,'wrong',0)", (old,))
+        rows = conn.execute("SELECT qkey, ordinal FROM question_slot ORDER BY ordinal").fetchall()
+        self.assertEqual([r["ordinal"] for r in rows], [1, 2, 3])
+        conn.close()
+
+    def test_stem_edit_relinks_by_slot_not_by_guessing(self):
+        before = self.qkeys()
+        conn = state.open_root(self.tmp)
+        conn.execute("INSERT INTO star VALUES (?,'wrong',0)", (before[1],))
+        conn.execute("INSERT INTO note VALUES (?,'我的筆記',0)", (before[1],))
         conn.commit()
         conn.close()
-        self.f.write_text(
-            self.f.read_text(encoding="utf-8").replace("題幹一", "題幹壹"), encoding="utf-8"
-        )
+
+        self.f.write_text(bank_md(["題幹一", "題幹貳", "題幹三"]), encoding="utf-8")
         conn = state.open_root(self.tmp)
         report = state.reconcile(conn, self.tmp)
-        new = conn.execute("SELECT qkey FROM cat.question").fetchone()[0]
-        self.assertNotEqual(old, new)
-        self.assertEqual(conn.execute("SELECT qkey FROM star").fetchone()[0], new)
+        after = [r[0] for r in conn.execute("SELECT qkey FROM cat.question ORDER BY ordinal")]
+        self.assertEqual(after[0], before[0])          # untouched Questions keep their identity
+        self.assertEqual(after[2], before[2])
+        self.assertNotEqual(after[1], before[1])
         self.assertEqual(len(report["relinked_questions"]), 1)
+        self.assertEqual(report["relinked_questions"][0]["to"], after[1])
+        self.assertEqual(conn.execute("SELECT qkey FROM star").fetchone()[0], after[1])
+        self.assertEqual(conn.execute("SELECT qkey FROM note").fetchone()[0], after[1])
+        self.assertEqual(report["unresolved"], [])
+        conn.close()
+
+    def test_a_deleted_question_is_reported_unresolved_not_mislinked(self):
+        before = self.qkeys()
+        conn = state.open_root(self.tmp)
+        conn.execute("INSERT INTO star VALUES (?,'wrong',0)", (before[2],))
+        conn.commit()
+        conn.close()
+
+        self.f.write_text(bank_md(["題幹一", "題幹二"]), encoding="utf-8")
+        conn = state.open_root(self.tmp)
+        report = state.reconcile(conn, self.tmp)
+        self.assertEqual(report["relinked_questions"], [])
+        self.assertEqual(report["unresolved"], [before[2]])
+        self.assertEqual(conn.execute("SELECT qkey FROM star").fetchone()[0], before[2])
+        conn.close()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1007,6 +1260,8 @@ from . import catalog
 DDL = """
 CREATE TABLE IF NOT EXISTS file_id(fid TEXT PRIMARY KEY, relpath TEXT, first_seen REAL,
                                    fingerprint TEXT);
+-- Where each qkey sat at the previous parse: the Slot that survives a text edit (ADR 0002).
+CREATE TABLE IF NOT EXISTS question_slot(qkey TEXT PRIMARY KEY, bkey TEXT, ordinal INT, ts REAL);
 CREATE TABLE IF NOT EXISTS annotation(id INTEGER PRIMARY KEY AUTOINCREMENT, fid TEXT,
                                       block_line INT, exact TEXT, prefix TEXT, suffix TEXT,
                                       color TEXT, note_md TEXT, ts REAL, orphan INT DEFAULT 0);
@@ -1079,11 +1334,27 @@ def open_root(root: Path) -> sqlite3.Connection:
 
     catalog.build(conn, root, fid_for=fid_for)
     conn.commit()
+    # Slots from the previous parse survive (upsert, never delete), so `reconcile` can match on them.
+    record_slots(conn)
     return conn
 
 
+def record_slots(conn: sqlite3.Connection) -> None:
+    """Remember where each qkey sat. Without this, a changed stem has nothing to match on."""
+    now = time.time()
+    conn.executemany(
+        "INSERT INTO question_slot(qkey, bkey, ordinal, ts) VALUES (?,?,?,?)"
+        " ON CONFLICT(qkey) DO UPDATE SET bkey=excluded.bkey, ordinal=excluded.ordinal, ts=excluded.ts",
+        [
+            (r["qkey"], r["bkey"], r["ordinal"], now)
+            for r in conn.execute("SELECT qkey, bkey, ordinal FROM cat.question")
+        ],
+    )
+    conn.commit()
+
+
 def reconcile(conn: sqlite3.Connection, root: Path) -> dict:
-    """Relink user-state qkeys whose Question text changed, by (bkey, ordinal)."""
+    """Relink user-state qkeys whose Question text changed, by their remembered Slot."""
     report = {"relinked_files": [], "relinked_questions": [], "unresolved": []}
     live = {r["qkey"] for r in conn.execute("SELECT qkey FROM cat.question")}
     used = set()
@@ -1091,39 +1362,38 @@ def reconcile(conn: sqlite3.Connection, root: Path) -> dict:
         used |= {r["qkey"] for r in conn.execute(f"SELECT DISTINCT qkey FROM {table}")}
     orphaned = sorted(used - live)
     if not orphaned:
+        record_slots(conn)
         return report
 
-    by_slot = {}
-    for r in conn.execute("SELECT qkey, bkey, ordinal FROM cat.question"):
-        by_slot[(r["bkey"], r["ordinal"])] = r["qkey"]
-    taken = set(live & used)
-
-    hist = {
-        r["qkey"]: (r["bkey"], r["ordinal"])
+    by_slot = {
+        (r["bkey"], r["ordinal"]): r["qkey"]
         for r in conn.execute("SELECT qkey, bkey, ordinal FROM cat.question")
     }
+    remembered = {
+        r["qkey"]: (r["bkey"], r["ordinal"])
+        for r in conn.execute("SELECT qkey, bkey, ordinal FROM question_slot")
+    }
+    taken = live & used
     for old in orphaned:
-        slot = hist.get(old)
+        slot = remembered.get(old)
         new = by_slot.get(slot) if slot else None
-        if new is None:
-            # fall back: a single free slot in a bank that lost exactly one qkey
-            free = [k for k, v in by_slot.items() if v not in taken]
-            new = by_slot[free[0]] if len(free) == 1 else None
-        if new is None:
+        if new is None or new in taken:
             report["unresolved"].append(old)
             continue
         for table in ("star", "note", "attempt_item"):
             conn.execute(f"UPDATE OR IGNORE {table} SET qkey=? WHERE qkey=?", (new, old))
+        conn.execute("DELETE FROM question_slot WHERE qkey=?", (old,))
         taken.add(new)
-        report["relinked_questions"].append({"from": old, "to": new})
+        report["relinked_questions"].append({"from": old, "to": new, "slot": "%s#%d" % slot})
     conn.commit()
+    record_slots(conn)
     return report
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_rules -v`
-Expected: PASS (5 tests). `WENS_TUTOR_CONFIG` keeps the registry out of the real config during tests — set it in any test that touches `registry`.
+Expected: PASS (7 tests). `WENS_TUTOR_CONFIG` keeps the registry out of the real config during tests — set it in any test that touches `registry`.
 
 - [ ] **Step 5: Commit**
 
@@ -1273,6 +1543,9 @@ def _selectable(conn, criteria):
         args += list(criteria["bkeys"])
     if criteria.get("drill"):
         sql.append("AND q.qkey IN (SELECT qkey FROM star)")
+    if criteria.get("qkeys"):
+        sql.append("AND q.qkey IN (%s)" % ",".join("?" * len(criteria["qkeys"])))
+        args += list(criteria["qkeys"])
     sql.append("ORDER BY f.relpath, b.path, q.ordinal")
     return [r["qkey"] for r in conn.execute(" ".join(sql), args)]
 
@@ -1280,15 +1553,14 @@ def _selectable(conn, criteria):
 def compose(conn, criteria: dict) -> int:
     criteria = dict(criteria)
     drill = bool(criteria.get("drill"))
+    explicit = bool(criteria.get("qkeys"))
     qkeys = _selectable(conn, criteria)
-    if criteria.get("shuffle", True) and not drill:
-        random.shuffle(qkeys)
-    elif drill:
+    if not explicit and criteria.get("shuffle", True):
         random.shuffle(qkeys)
     cap = criteria.get("cap")
-    if cap and not drill:
+    if cap and not drill and not explicit:
         qkeys = qkeys[: int(cap)]
-    timed = bool(criteria.get("timed", True)) and not drill
+    timed = bool(criteria.get("timed", True)) and not drill and not explicit
     limit_ms = len(qkeys) * SECONDS_PER_QUESTION * 1000 if timed else None
     cur = conn.execute(
         "INSERT INTO paper(criteria_json, qkeys_json, limit_ms, created) VALUES (?,?,?,?)",
@@ -1419,16 +1691,32 @@ def stats(conn) -> dict:
     missed = [
         dict(r)
         for r in conn.execute(
-            "SELECT qkey, count(*) AS wrong_count FROM attempt_item WHERE correct=0 AND given IS NOT NULL"
-            " GROUP BY qkey ORDER BY wrong_count DESC, qkey LIMIT 20"
+            "SELECT i.qkey, count(*) AS wrong_count, q.ordinal, b.title AS bank_title,"
+            " substr(q.stem_md, 1, 80) AS snippet"
+            " FROM attempt_item i JOIN cat.question q ON q.qkey=i.qkey"
+            " JOIN cat.bank b ON b.bkey=q.bkey"
+            " WHERE i.correct=0 AND i.given IS NOT NULL"
+            " GROUP BY i.qkey ORDER BY wrong_count DESC, q.ordinal LIMIT 20"
         )
     ]
+    # An Attempt belongs to a Bank when every one of its Questions does; a mixed Paper
+    # counts toward no Bank rather than being attributed to an arbitrary one.
     per_bank = [
         dict(r)
         for r in conn.execute(
             "SELECT b.bkey, b.title, count(DISTINCT q.qkey) AS n_questions,"
             " (SELECT count(*) FROM star s JOIN cat.question sq ON sq.qkey=s.qkey WHERE sq.bkey=b.bkey) AS stars,"
-            " (SELECT count(*) FROM cat.defect d JOIN cat.question dq ON dq.qkey=d.qkey WHERE dq.bkey=b.bkey) AS defects"
+            " (SELECT count(*) FROM cat.defect d JOIN cat.question dq ON dq.qkey=d.qkey WHERE dq.bkey=b.bkey) AS defects,"
+            " (SELECT count(*) FROM attempt a WHERE a.finished IS NOT NULL AND a.id IN ("
+            "   SELECT i.attempt_id FROM attempt_item i JOIN cat.question iq ON iq.qkey=i.qkey"
+            "   GROUP BY i.attempt_id HAVING count(DISTINCT iq.bkey)=1 AND max(iq.bkey)=b.bkey)) AS attempts,"
+            " (SELECT round(a.correct*100.0/a.total,1) FROM attempt a WHERE a.finished IS NOT NULL AND a.id IN ("
+            "   SELECT i.attempt_id FROM attempt_item i JOIN cat.question iq ON iq.qkey=i.qkey"
+            "   GROUP BY i.attempt_id HAVING count(DISTINCT iq.bkey)=1 AND max(iq.bkey)=b.bkey)"
+            "   ORDER BY a.finished DESC LIMIT 1) AS latest_score,"
+            " (SELECT max(round(a.correct*100.0/a.total,1)) FROM attempt a WHERE a.finished IS NOT NULL AND a.id IN ("
+            "   SELECT i.attempt_id FROM attempt_item i JOIN cat.question iq ON iq.qkey=i.qkey"
+            "   GROUP BY i.attempt_id HAVING count(DISTINCT iq.bkey)=1 AND max(iq.bkey)=b.bkey)) AS best_score"
             " FROM cat.bank b JOIN cat.question q ON q.bkey=b.bkey GROUP BY b.bkey ORDER BY b.bkey"
         )
     ]
@@ -1446,7 +1734,7 @@ def stats(conn) -> dict:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_rules -v`
-Expected: PASS (11 tests)
+Expected: PASS (13 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -1613,7 +1901,7 @@ def lookup(conn, query: str, exclude_qkey: str = None) -> dict:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_rules -v`
-Expected: PASS (16 tests)
+Expected: PASS (18 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -1692,6 +1980,34 @@ class TestApi(unittest.TestCase):
         self.assertEqual(result["correct"], 1)
         self.assertEqual(result["score"], 100.0)
 
+    def test_in_flight_payload_never_carries_the_key(self):
+        code, paper = api.handle(self.conn, "POST", "/api/paper", {}, {"cap": 10, "timed": False})
+        for source in (paper, api.handle(self.conn, "GET", f"/api/attempt/{paper['attempt_id']}", {}, None)[1]):
+            for q in source["questions"]:
+                self.assertNotIn("answer", q)
+                self.assertNotIn("explanation_md", q)
+                self.assertNotIn("explanation_origin", q)
+
+    def test_submit_returns_the_key_for_wrong_questions_only(self):
+        code, paper = api.handle(self.conn, "POST", "/api/paper", {}, {"cap": 10, "timed": False})
+        aid = paper["attempt_id"]
+        qkey = paper["questions"][0]["qkey"]
+        api.handle(self.conn, "PUT", f"/api/attempt/{aid}/answer", {}, {"qkey": qkey, "given": "C", "ms": 100})
+        code, result = api.handle(self.conn, "POST", f"/api/attempt/{aid}/submit", {}, {})
+        self.assertEqual(len(result["wrong"]), 1)
+        item = result["wrong"][0]
+        self.assertEqual(item["qkey"], qkey)
+        self.assertEqual(item["answer"], "A")
+        self.assertEqual(item["given"], "C")
+        self.assertIn("stem_md", item)
+        self.assertIn("note_md", item)
+
+    def test_version_is_served(self):
+        code, meta = api.handle(self.conn, "GET", "/api/version", {}, None)
+        self.assertEqual(code, 200)
+        self.assertTrue(meta["version"])
+        self.assertEqual(meta["project"], "wens-tutor")
+
     def test_unknown_route_is_404(self):
         code, _ = api.handle(self.conn, "GET", "/api/nope", {}, None)
         self.assertEqual(code, 404)
@@ -1710,14 +2026,37 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'tutorlib.api'`
 
 import json
 import re
+import subprocess
 import time
+from pathlib import Path
 
-from . import compose
+from . import compose, registry
 
 ANN_ID = re.compile(r"^/api/annotation/(\d+)$")
 ATT_ANSWER = re.compile(r"^/api/attempt/(\d+)/answer$")
 ATT_SUBMIT = re.compile(r"^/api/attempt/(\d+)/submit$")
 ATT_GET = re.compile(r"^/api/attempt/(\d+)$")
+SKILL_DIR = Path(__file__).resolve().parents[2]
+_VERSION = None
+
+
+def version_meta(conn=None) -> dict:
+    """There is no build step, so the version is whatever git can tell us, read once."""
+    global _VERSION
+    if _VERSION is None:
+        try:
+            _VERSION = subprocess.run(
+                ["git", "describe", "--tags", "--always", "--dirty"],
+                cwd=str(SKILL_DIR), capture_output=True, text=True, timeout=5,
+            ).stdout.strip() or "dev"
+        except (OSError, subprocess.SubprocessError):
+            _VERSION = "dev"
+    return {
+        "version": _VERSION,
+        "root": str(registry.default_root() or ""),
+        "project": "wens-tutor",
+        "license": "see repository",
+    }
 
 
 def _one(query, key, default=None):
@@ -1731,6 +2070,7 @@ def _fid(conn, relpath):
 
 
 def _questions_of_attempt(conn, attempt_id):
+    """In-flight view: stem, options, Star state. Never `answer`, never `explanation_md` (ADR 0013)."""
     row = conn.execute(
         "SELECT p.qkeys_json FROM attempt a JOIN paper p ON p.id=a.paper_id WHERE a.id=?",
         (attempt_id,),
@@ -1738,8 +2078,8 @@ def _questions_of_attempt(conn, attempt_id):
     out = []
     for qkey in json.loads(row["qkeys_json"]):
         q = conn.execute(
-            "SELECT q.qkey, q.ordinal, q.stem_md, q.options_json, q.explanation_md,"
-            " q.explanation_origin, b.title AS bank_title"
+            "SELECT q.qkey, q.ordinal, q.stem_md, q.options_json, q.shared_span,"
+            " b.title AS bank_title"
             " FROM cat.question q JOIN cat.bank b ON b.bkey=q.bkey WHERE q.qkey=?",
             (qkey,),
         ).fetchone()
@@ -1750,6 +2090,28 @@ def _questions_of_attempt(conn, attempt_id):
         d["options"] = json.loads(d.pop("options_json"))
         d["given"] = item["given"] if item else None
         d["starred"] = bool(conn.execute("SELECT 1 FROM star WHERE qkey=?", (qkey,)).fetchone())
+        out.append(d)
+    return out
+
+
+def _wrong_detail(conn, attempt_id, qkeys):
+    """Post-submission view: the correct option, its Explanation, and any Note."""
+    out = []
+    for qkey in qkeys:
+        q = conn.execute(
+            "SELECT q.qkey, q.ordinal, q.stem_md, q.options_json, q.answer, q.explanation_md,"
+            " q.explanation_origin, b.title AS bank_title"
+            " FROM cat.question q JOIN cat.bank b ON b.bkey=q.bkey WHERE q.qkey=?",
+            (qkey,),
+        ).fetchone()
+        given = conn.execute(
+            "SELECT given FROM attempt_item WHERE attempt_id=? AND qkey=?", (attempt_id, qkey)
+        ).fetchone()
+        note = conn.execute("SELECT note_md FROM note WHERE qkey=?", (qkey,)).fetchone()
+        d = dict(q)
+        d["options"] = json.loads(d.pop("options_json"))
+        d["given"] = given["given"] if given else None
+        d["note_md"] = note["note_md"] if note else ""
         out.append(d)
     return out
 
@@ -1898,7 +2260,10 @@ def handle(conn, method, path, query, body):
 
     m = ATT_SUBMIT.match(path)
     if m and method == "POST":
-        return 200, compose.submit(conn, int(m.group(1)))
+        attempt_id = int(m.group(1))
+        result = compose.submit(conn, attempt_id)
+        result["wrong"] = _wrong_detail(conn, attempt_id, result["wrong"])
+        return 200, result
 
     if path == "/api/star" and method == "POST":
         return 200, {"starred": compose.toggle_star(conn, body["qkey"])}
@@ -1914,13 +2279,16 @@ def handle(conn, method, path, query, body):
     if path == "/api/stats" and method == "GET":
         return 200, compose.stats(conn)
 
+    if path == "/api/version" and method == "GET":
+        return 200, version_meta(conn)
+
     return 404, {"error": "unknown endpoint"}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_rules -v`
-Expected: PASS (20 tests)
+Expected: PASS (25 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -1941,7 +2309,9 @@ git commit -m "feat(wens-tutor): JSON API over catalogue and user state"
 - Consumes: `state.open_root`.
 - Produces: `state.export_json(conn, root) -> Path`; `state.import_json(conn, root, merge=False) -> dict`; `state.json_path(root) -> Path`.
 
-Read ADR 0009 first.
+Read ADR 0009 first. `question_slot` is deliberately **not** in `TABLES`: it is derived from the
+content and rebuilt by `record_slots` on every `open_root`, so exporting it would put a
+regenerable table into the human-readable recovery artefact.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2050,7 +2420,7 @@ def import_json(conn: sqlite3.Connection, root: Path, merge: bool = False) -> di
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_rules -v`
-Expected: PASS (22 tests)
+Expected: PASS (27 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2246,7 +2616,7 @@ def serve(root, port=8765, bind="127.0.0.1", token=None, open_browser=False) -> 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest tests.test_rules -v`
-Expected: PASS (25 tests)
+Expected: PASS (30 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2289,35 +2659,47 @@ SKELETON_COURSE = """# {title}
 （在此撰寫內容）
 """
 
-SKELETON_BANK_EXAM = """# {title}
-
-## 一、選擇題
-
-### 第 1 題
+# Placeholder stems MUST differ: identical text produces identical qkeys and
+# `INSERT OR IGNORE` would silently collapse the whole skeleton into one Question (ADR 0002).
+EXAM_HEAD = "# {title}\n\n## 一、選擇題\n"
+EXAM_Q = """
+### 第 {n} 題
 
 **答案：A**
 
-（題幹）
+（第 {n} 題題幹）
 
 (A) 甲;
 (B) 乙;
 (C) 丙;
 (D) 丁
 """
+GUIDE_HEAD = "# {title}\n\n## 1. 練習\n\n### 選擇題\n"
+GUIDE_Q = """
+{n}. （第 {n} 題題幹）
+   - （A）甲
+   - （B）乙
+   - （C）丙
+   - （D）丁
+"""
+GUIDE_ANSWER_HEAD = "\n### 解答與解析\n"
+GUIDE_ANSWER = """
+**{n}. Ans（A） 甲**
+
+解析：（在此撰寫解析）
+"""
 
 
-def resolve_root(args):
-    if getattr(args, "root", None):
-        return Path(args.root).expanduser().resolve()
-    r = registry.default_root()
-    if not r:
-        print("no root registered; run: tutor.py init <root>", file=sys.stderr)
-        raise SystemExit(2)
-    if not r.exists():
-        print("registered root is missing: %s" % r, file=sys.stderr)
-        raise SystemExit(2)
-    return r
-
+def skeleton_bank(title: str, shape: str, questions: int) -> str:
+    if shape == "guide":
+        body = [GUIDE_HEAD.format(title=title)]
+        body += [GUIDE_Q.format(n=i) for i in range(1, questions + 1)]
+        body.append(GUIDE_ANSWER_HEAD)
+        body += [GUIDE_ANSWER.format(n=i) for i in range(1, questions + 1)]
+        return "".join(body)
+    body = [EXAM_HEAD.format(title=title)]
+    body += [EXAM_Q.format(n=i) for i in range(1, questions + 1)]
+    return "".join(body)
 
 def cmd_init(args):
     root = Path(args.root).expanduser().resolve()
@@ -2356,6 +2738,7 @@ def cmd_check(args):
 
     for p in state.catalog.material_files(root):
         md = p.read_text(encoding="utf-8")
+        lines = md.splitlines()
         secs, banks = parser.parse_file(md)
         if parser.QHEAD.search(md) and not banks:
             findings.append("unparsed_bank: %s" % p.name)
@@ -2365,6 +2748,27 @@ def cmd_check(args):
                 nxt = titles[i + 1] if i + 1 < len(titles) else ""
                 if nxt != "解答與解析":
                     findings.append("unpaired_guide_bank: %s / %s" % (p.name, secs[i].path))
+
+        # A `第 N 題` heading that produced no Question, or two Questions that collapsed
+        # into one row, both show up as a count mismatch (ADR 0002).
+        headings = len([l for l in lines if parser.QHEAD.match(l)])
+        parsed = sum(len(b.questions) for b in banks if b.shape == "exam")
+        if headings and parsed != headings:
+            findings.append("collapsed_questions: %s %d headings -> %d Questions"
+                            % (p.name, headings, parsed))
+
+        # Folding resolves an ordinal against the first covering span, which is only
+        # unambiguous while spans do not overlap (ADR 0011).
+        spans = sorted(parser.find_shared_stems(lines)[0])
+        for a, b in zip(spans, spans[1:]):
+            if b[0] <= a[1]:
+                findings.append("overlapping_shared_stems: %s 第%d～%d題 vs 第%d～%d題"
+                                % (p.name, a[0], a[1], b[0], b[1]))
+
+        for b in banks:
+            for q in b.questions:
+                for line in q.unattributed:
+                    findings.append("unattributed_line: %s 第%d題 %r" % (p.name, q.ordinal, line))
 
     report = state.reconcile(conn, root)
     for item in report["relinked_questions"]:
@@ -2421,12 +2825,7 @@ def cmd_new(args):
     if args.kind == "course":
         path.write_text(SKELETON_COURSE.format(title=args.title), encoding="utf-8")
     else:
-        body = [SKELETON_BANK_EXAM.format(title=args.title)]
-        for i in range(2, args.questions + 1):
-            body.append(
-                "### 第 %d 題\n\n**答案：A**\n\n（題幹）\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n" % i
-            )
-        path.write_text("\n".join(body), encoding="utf-8")
+        path.write_text(skeleton_bank(args.title, args.shape, args.questions), encoding="utf-8")
     print(path)
     return 0
 
@@ -2487,6 +2886,7 @@ def main(argv=None):
     p.add_argument("--root"); p.set_defaults(fn=cmd_relink)
     p = sub.add_parser("new"); p.add_argument("kind", choices=["course", "bank"])
     p.add_argument("subject"); p.add_argument("title"); p.add_argument("--questions", type=int, default=10)
+    p.add_argument("--shape", choices=["exam", "guide"], default="exam")
     p.add_argument("--root"); p.set_defaults(fn=cmd_new)
     p = sub.add_parser("serve"); p.add_argument("--root"); p.add_argument("--port", type=int)
     p.add_argument("--bind", default="127.0.0.1"); p.add_argument("--open", action="store_true")
@@ -2513,10 +2913,10 @@ cd skills/wens-tutor
 export WENS_TUTOR_CONFIG=/tmp/wens-tutor-test.json
 uv run --python 3.14 python3 scripts/tutor.py check ; echo "exit=$?"   # expect 2 (no root registered)
 uv run --python 3.14 python3 scripts/tutor.py init ~/repos/wenswiki/wenswiki/work/平台/2026_AI應用規劃師
-uv run --python 3.14 python3 scripts/tutor.py check ; echo "exit=$?"   # expect 1, 26 defect lines
+uv run --python 3.14 python3 scripts/tutor.py check ; echo "exit=$?"   # expect 1, 28 findings
 ```
 
-Expected: first `exit=2`; after `init`, `exit=1` with 3 `no_answer` and 23 `figure_missing` lines.
+Expected: first `exit=2`; after `init`, `exit=1` with 3 `no_answer` and 25 `figure_missing` lines, 0 `unattributed_line`, 0 `collapsed_questions`, 0 `overlapping_shared_stems`.
 
 - [ ] **Step 3: Verify `stats` and `export` run clean**
 
@@ -2526,9 +2926,19 @@ uv run --python 3.14 python3 scripts/tutor.py export
 git -C ~/repos/wenswiki/wenswiki/work/平台/2026_AI應用規劃師 status --short
 ```
 
-Expected: `stats` prints zero attempts, 0 stars, 26 defects; `export` prints the `.tutor/tutor.json` path; git shows exactly two new untracked paths under `.tutor/`.
+Expected: `stats` prints zero attempts, 0 stars, 28 defects; `export` prints the `.tutor/tutor.json` path; git shows exactly two new untracked paths under `.tutor/`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Verify both skeleton shapes parse to the count they claim**
+
+```bash
+uv run --python 3.14 python3 scripts/tutor.py new bank 科目A 骨架測試 --questions 10 --shape exam
+uv run --python 3.14 python3 scripts/tutor.py new bank 科目A 骨架測試指引 --questions 6 --shape guide
+uv run --python 3.14 python3 scripts/tutor.py check | grep -E "collapsed_questions|unpaired_guide_bank" ; echo "hits=$?"
+```
+
+Expected: no `collapsed_questions` and no `unpaired_guide_bank` line (`grep` exits 1, so `hits=1`) — ten distinct exam stems and a guide skeleton whose `選擇題` region is followed by `解答與解析`. Delete both files afterwards; they are scaffolding, not corpus.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add skills/wens-tutor/scripts/tutor.py
@@ -2578,11 +2988,13 @@ export const S = {
           timed: "計時", includeDefective: "含殘缺題", start: "開始",
           submit: "交卷", remaining: "剩餘", expired: "已逾時", score: "分數",
           pass: "及格（60）", wrongOnly: "錯題", explanation: "解析", myNote: "我的筆記",
-          star: "重點題", courseTab: "課程", bankTab: "考古題", queryUsed: "實際查詢" },
+          star: "重點題", courseTab: "課程", bankTab: "考古題", queryUsed: "實際查詢",
+          blank: "未作答" },
   stats: { title: "統計", scores: "分數趨勢", pace: "作答節奏", missed: "最常錯的題目",
-           perBank: "各題庫", trend: "重點題與殘缺題" },
+           perBank: "各題庫", trend: "重點題與殘缺題", latest: "最新", best: "最佳",
+           attempts: "作答次數", none: "還沒有錯題紀錄" },
   keys: { esc: "Esc 返回", enter: "Enter 確認", arrows: "← → 換題", digits: "1-4 選項" },
-  about: { help: "說明", version: "版本", project: "專案", license: "授權" },
+  about: { help: "說明", version: "版本", root: "教材目錄", project: "專案", license: "授權" },
 };
 export default S;
 ```
@@ -2735,24 +3147,28 @@ mark.ann--blue { background: #b3e0ff; } mark.ann--pink { background: #ffc7e0; }
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#0b5",
-  "icons": []
+  "theme_color": "#0b5"
 }
 ```
 
 - [ ] **Step 3: Smoke-verify the renderer in the real browser**
 
-Start the server, open the portal route, and check that markdown-it and the modules load:
+`render.js` reads `window.markdownit` at module load, so every page that imports it **must** carry
+`<script src="/vendor/markdown-it.min.js"></script>` before its module tag. Prove that contract on the
+one page that renders Markdown, not on the portal:
 
 ```bash
 cd skills/wens-tutor
 uv run --python 3.14 python3 scripts/tutor.py serve --port 8765 &
 ```
 
-In the browser tool: open `http://127.0.0.1:8765/?t=<token>`, then evaluate
-`typeof window.markdownit` → `"function"`, and `(await import('/app/render.js')).renderInto` → a function.
+In the browser tool, open `http://127.0.0.1:8765/reader?p=<any .md>&t=<token>` and evaluate
+`typeof window.markdownit` → `"function"`, then
+`(await import('/app/render.js')).renderInto` → a function, then
+`document.querySelectorAll('#doc [data-line]').length` → greater than zero.
 
-Expected: both truthy, no console errors.
+Expected: all three, and an empty console. A `TypeError: window.markdownit is not a function` means the
+vendor tag is missing from that page — the defect this step exists to catch.
 
 - [ ] **Step 4: Commit**
 
@@ -2796,27 +3212,30 @@ git commit -m "feat(wens-tutor): web shell — strings, host switch, api client,
 import S from "/strings.js";
 import * as api from "/app/api.js";
 
-const el = (tag, props = {}, ...kids) => Object.assign(document.createElement(tag), props, {}) &&
-  (() => { const n = document.createElement(tag); Object.assign(n, props); kids.forEach(k => n.append(k)); return n; })();
+const make = (tag, props) => Object.assign(document.createElement(tag), props || {});
 
 function courseCard(f) {
   const pct = f.leaf_sections ? Math.round((f.read_sections / f.leaf_sections) * 100) : 0;
-  const card = el("article", { className: "card" });
-  const link = el("a", { href: `/reader?p=${encodeURIComponent(f.relpath)}`, textContent: f.title });
-  const bar = el("progress");
-  bar.max = f.leaf_sections || 1; bar.value = f.read_sections;
-  card.append(link, bar, el("span", {
-    textContent: ` ${S.portal.progress} ${pct}% · ${S.portal.annotations} ${f.annotations}` +
-      (f.orphans ? ` · ${S.portal.orphans} ${f.orphans}` : ""),
-  }));
+  const card = make("article", { className: "card" });
+  const bar = make("progress");
+  bar.max = f.leaf_sections || 1;
+  bar.value = f.read_sections;
+  card.append(
+    make("a", { href: `/reader?p=${encodeURIComponent(f.relpath)}`, textContent: f.title }),
+    bar,
+    make("span", {
+      textContent: ` ${S.portal.progress} ${pct}% · ${S.portal.annotations} ${f.annotations}` +
+        (f.orphans ? ` · ${S.portal.orphans} ${f.orphans}` : ""),
+    }),
+  );
   return card;
 }
 
 function bankCard(f, b) {
-  const card = el("article", { className: "card" });
+  const card = make("article", { className: "card" });
   card.append(
-    el("a", { href: `/exam?bkey=${encodeURIComponent(b.bkey)}`, textContent: `${f.title} — ${b.title}` }),
-    el("span", {
+    make("a", { href: `/exam?bkey=${encodeURIComponent(b.bkey)}`, textContent: `${f.title} — ${b.title}` }),
+    make("span", {
       textContent: ` ${b.n_questions} 題 · ${S.portal.stars} ${b.stars}` +
         (b.defects ? ` · ${S.portal.defects} ${b.defects}` : ""),
     }),
@@ -2824,22 +3243,43 @@ function bankCard(f, b) {
   return card;
 }
 
+/** One panel, one source: everything in it comes from `/api/version`. */
+function mountAbout(meta) {
+  const button = document.getElementById("help");
+  button.textContent = S.about.help;
+  const panel = make("aside", { className: "popup about", hidden: true });
+  panel.append(
+    make("p", { textContent: `${S.about.version}: ${meta.version}` }),
+    make("p", { textContent: `${S.about.root}: ${meta.root}` }),
+    make("p", { textContent: `${S.about.project}: ${meta.project}` }),
+    make("p", { textContent: `${S.about.license}: ${meta.license}` }),
+    make("p", { textContent: [S.keys.esc, S.keys.enter, S.keys.arrows, S.keys.digits].join("　") }),
+  );
+  document.body.append(panel);
+  button.addEventListener("click", () => { panel.hidden = !panel.hidden; });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !panel.hidden) panel.hidden = true;
+  });
+}
+
 async function main() {
   document.getElementById("appname").textContent = S.app;
   document.getElementById("keys").textContent = [S.keys.esc, S.keys.enter].join("　");
-  const data = await api.get("/api/portal");
+  const [data, meta] = await Promise.all([api.get("/api/portal"), api.get("/api/version")]);
+  document.getElementById("version").textContent = meta.version;
+  mountAbout(meta);
   const root = document.getElementById("root");
 
-  const actions = el("nav");
+  const actions = make("nav");
   actions.append(
-    el("a", { href: "/exam", textContent: S.portal.newPaper }),
-    el("a", { href: "/exam?drill=1", textContent: S.portal.drill }),
-    el("a", { href: "/stats", textContent: S.portal.stats }),
+    make("a", { href: "/exam", textContent: S.portal.newPaper }),
+    make("a", { href: "/exam?drill=1", textContent: S.portal.drill }),
+    make("a", { href: "/stats", textContent: S.portal.stats }),
   );
   root.append(actions);
 
   for (const a of data.in_flight) {
-    root.append(el("a", {
+    root.append(make("a", {
       href: `/exam?attempt=${a.attempt_id}`,
       className: "card in-flight",
       textContent: `${S.portal.inFlight} · attempt #${a.attempt_id}`,
@@ -2847,12 +3287,19 @@ async function main() {
   }
 
   for (const s of data.subjects) {
-    const sec = el("section");
-    sec.append(el("h2", { textContent: s.subject }));
-    sec.append(el("h3", { textContent: S.portal.courses }));
-    for (const f of s.files) if (!f.banks.length) sec.append(courseCard(f));
-    sec.append(el("h3", { textContent: S.portal.banks }));
-    for (const f of s.files) for (const b of f.banks) sec.append(bankCard(f, b));
+    const sec = make("section");
+    sec.append(make("h2", { textContent: s.subject }));
+    // A Material File is Course prose AND Bank regions (ADR 0006): the study guides list twice.
+    const courses = s.files.filter((f) => f.leaf_sections > 0);
+    const banks = s.files.flatMap((f) => f.banks.map((b) => [f, b]));
+    if (courses.length) {
+      sec.append(make("h3", { textContent: S.portal.courses }));
+      for (const f of courses) sec.append(courseCard(f));
+    }
+    if (banks.length) {
+      sec.append(make("h3", { textContent: S.portal.banks }));
+      for (const [f, b] of banks) sec.append(bankCard(f, b));
+    }
     root.append(sec);
   }
 }
@@ -2861,7 +3308,7 @@ main();
 
 - [ ] **Step 2: Verify in the browser**
 
-Open `http://127.0.0.1:8765/?t=<token>` and confirm: two Subject sections; the 學習指引 files appear as Course cards *and* contribute Bank cards (7 guide Banks + 4 exam Banks = 11 Bank cards); Defect badges show 26 total across the exam Banks.
+Open `http://127.0.0.1:8765/?t=<token>` and confirm: two Subject sections; **4 Course cards — both 學習指引 appear here as well as contributing Bank cards** (a Material File is Course prose *and* Bank regions, ADR 0006); 11 Bank cards (7 guide + 4 exam); Defect badges summing to 28 across the exam Banks; the header showing a `git describe` version; the Help/About panel opening from that header and closing on `Esc`.
 
 - [ ] **Step 3: Commit**
 
@@ -2902,6 +3349,7 @@ git commit -m "feat(wens-tutor): portal page generated from the catalogue"
 </main>
 <div id="selbar" class="selection-bar--float" hidden></div>
 <footer class="keys" id="keys"></footer>
+<script src="/vendor/markdown-it.min.js"></script>
 <script type="module" src="/app/reader.js"></script>
 </html>
 ```
@@ -3092,7 +3540,7 @@ load();
 
 - [ ] **Step 2: Verify in the browser**
 
-Open the 學習指引 科目1 in the reader. Confirm: the document renders; the TOC lists 73 rows with 57 checkboxes; selecting text raises the bar; a yellow Highlight persists across a reload; ticking a Section moves the portal's progress bar; `?q=` flashes the term.
+Open the 學習指引 科目1 in the reader. Confirm: the document renders (a blank article means the vendored `markdown-it` tag is missing from the page); the TOC lists 73 rows with 57 checkboxes; selecting text raises the bar; a yellow Highlight persists across a reload; ticking a Section moves the portal's progress bar; `?q=` flashes the term.
 
 - [ ] **Step 3: Commit**
 
@@ -3126,6 +3574,7 @@ git commit -m "feat(wens-tutor): reader with persistent Annotations, Progress an
 <header class="app"><a href="/">←</a><strong id="phase"></strong><span id="clock"></span></header>
 <main id="root"></main>
 <footer class="keys" id="keys"></footer>
+<script src="/vendor/markdown-it.min.js"></script>
 <script type="module" src="/app/exam.js"></script>
 </html>
 ```
@@ -3140,12 +3589,13 @@ import { openLookupResult } from "/app/host.js";
 const params = new URLSearchParams(location.search);
 const root = document.getElementById("root");
 const clock = document.getElementById("clock");
-let attempt = null, index = 0, shownAt = Date.now(), ticker = null;
+let attempt = null, index = 0, shownAt = Date.now(), ticker = null, deadline = null;
 
 async function main() {
   document.getElementById("keys").textContent =
     [S.keys.digits, S.keys.arrows, S.keys.enter, S.keys.esc].join("　");
   if (params.get("attempt")) return openAttempt(Number(params.get("attempt")));
+  if (params.get("q")) return startPaper({ qkeys: [params.get("q")], timed: false });
   if (params.get("drill")) return startPaper({ drill: true });
   renderComposeForm();
 }
@@ -3203,15 +3653,22 @@ function renderComposeForm() {
   root.append(form);
 }
 
+/** The deadline is derived exactly once per Attempt open (ADR: never on re-paint). */
+function adoptAttempt(payload, id) {
+  attempt = payload;
+  attempt.attempt_id = id ?? payload.attempt_id;
+  deadline = payload.remaining_ms == null ? null : Date.now() + payload.remaining_ms;
+  startClock();
+}
+
 async function startPaper(criteria) {
-  attempt = await api.post("/api/paper", criteria);
+  adoptAttempt(await api.post("/api/paper", criteria));
   index = 0;
   paint();
 }
 
 async function openAttempt(id) {
-  attempt = await api.get(`/api/attempt/${id}`);
-  attempt.attempt_id = id;
+  adoptAttempt(await api.get(`/api/attempt/${id}`), id);
   index = attempt.questions.findIndex((q) => !q.given);
   if (index < 0) index = 0;
   paint();
@@ -3266,7 +3723,6 @@ function paint() {
   });
 
   root.append(star, look, submit, map);
-  startClock();
 }
 
 async function choose(letter) {
@@ -3275,20 +3731,30 @@ async function choose(letter) {
   await api.put(`/api/attempt/${attempt.attempt_id}/answer`, {
     qkey: q.qkey, given: letter, ms: Date.now() - shownAt,
   });
-  if (index < attempt.questions.length - 1) { index += 1; paint(); } else paint();
+  if (index < attempt.questions.length - 1) index += 1;
+  paint();
 }
 
 function startClock() {
   clearInterval(ticker);
-  if (attempt.remaining_ms == null) { clock.textContent = ""; return; }
-  const deadline = Date.now() + attempt.remaining_ms;
-  ticker = setInterval(() => {
+  if (deadline == null) { clock.textContent = ""; return; }
+  const render = () => {
     const left = deadline - Date.now();
     if (left <= 0) { clearInterval(ticker); finish(); return; }
     const s = Math.floor(left / 1000);
     clock.textContent = `${S.exam.remaining} ${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  }, 500);
+  };
+  render();
+  ticker = setInterval(render, 500);
 }
+
+/** A throttled tab drifts; the server holds the only authority on remaining time. */
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden || !attempt || deadline == null) return;
+  const fresh = await api.get(`/api/attempt/${attempt.attempt_id}`);
+  deadline = fresh.remaining_ms == null ? null : Date.now() + fresh.remaining_ms;
+  startClock();
+});
 
 async function lookupSelection(excludeQkey) {
   const term = (window.getSelection() || "").toString().trim() || prompt(S.reader.lookup) || "";
@@ -3323,33 +3789,43 @@ async function lookupSelection(excludeQkey) {
   close.addEventListener("click", () => panel.remove());
   panel.append(close, tabs, courses, questions);
   document.body.append(panel);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") panel.remove(); }, { once: true });
 }
 
+/** Everything shown here comes from the submit response - the exam never held the key. */
 async function finish() {
   clearInterval(ticker);
+  deadline = null;
+  clock.textContent = "";
   const result = await api.post(`/api/attempt/${attempt.attempt_id}/submit`, {});
   root.textContent = "";
   document.getElementById("phase").textContent = S.exam.score;
   root.append(Object.assign(document.createElement("h2"), {
     textContent: `${result.score} ${result.passed ? "✓ " + S.exam.pass : ""} ${result.expired ? S.exam.expired : ""}`,
   }));
-  for (const qkey of result.wrong) {
-    const q = attempt.questions.find((x) => x.qkey === qkey);
+  for (const item of result.wrong) {
     const box = document.createElement("article");
     const stem = document.createElement("div");
-    render.renderInto(stem, q.stem_md);
+    render.renderInto(stem, item.stem_md);
     box.append(stem);
-    box.append(Object.assign(document.createElement("p"),
-      { textContent: `✗ ${q.given || "—"} → ${q.options.map(([l]) => l).join("")}` }));
-    if (q.explanation_md) {
+    box.append(Object.assign(document.createElement("p"), {
+      textContent: `✗ ${item.given || S.exam.blank} → ✓ ${item.answer}`,
+    }));
+    if (item.explanation_md) {
       const ex = document.createElement("div");
-      render.renderInto(ex, `**${S.exam.explanation}（${q.explanation_origin}）**\n\n${q.explanation_md}`);
+      render.renderInto(ex, `**${S.exam.explanation}（${item.explanation_origin}）**\n\n${item.explanation_md}`);
       box.append(ex);
     }
     const note = document.createElement("textarea");
     note.placeholder = S.exam.myNote;
-    note.addEventListener("change", () => api.post("/api/note", { qkey, note_md: note.value }));
+    note.value = item.note_md || "";
+    note.addEventListener("change", () => api.post("/api/note", { qkey: item.qkey, note_md: note.value }));
     box.append(note);
+    const star = document.createElement("button");
+    star.type = "button";
+    star.textContent = "★ " + S.exam.star;
+    star.addEventListener("click", () => api.post("/api/star", { qkey: item.qkey }));
+    box.append(star);
     root.append(box);
   }
 }
@@ -3376,7 +3852,7 @@ main();
 
 - [ ] **Step 2: Verify in the browser**
 
-Compose a 10-Question Paper from one exam Bank. Confirm: 10 Questions, no defective ones; `1`–`4` and `A`–`D` answer; the countdown starts at 18:00 for 10 Questions; reloading mid-Attempt resumes with the countdown still falling; submitting shows a score, stars every wrong Question, and renders official Explanations for guide Questions.
+Compose a 10-Question Paper from one exam Bank. Confirm: 10 Questions, no defective ones; `1`–`4` and `A`–`D` answer; the countdown starts at 18:00 and **keeps falling across ten question changes** rather than resetting; the in-flight `/api/attempt/<id>` payload in DevTools carries no `answer` and no `explanation_md`; reloading mid-Attempt resumes with the countdown still falling; backgrounding the tab for a minute and returning re-syncs the clock to the server's remaining time; submitting shows a score, stars every wrong Question, and renders the correct option plus its Explanation from the submit response. Then open a folded Question (114年-科3 第46題) and confirm its `共用題幹` blockquote renders above its own stem.
 
 - [ ] **Step 3: Commit**
 
@@ -3413,7 +3889,7 @@ git commit -m "feat(wens-tutor): exam page with timing, resumption, Stars and Lo
 ```
 
 ```js
-// skills/wens-tutor/web/app/stats.js — panel order: score, pace, most-missed, per-bank, trend
+// skills/wens-tutor/web/app/stats.js — panel order: score, per-bank, most-missed, trend, pace
 import S from "/strings.js";
 import * as api from "/app/api.js";
 
@@ -3431,19 +3907,24 @@ function sparkline(values, passLine) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("width", "100%");
-  const line = (points, color) => {
+  const line = (points, color, dash) => {
     const el = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     el.setAttribute("points", points);
     el.setAttribute("fill", "none");
     el.setAttribute("stroke", color);
+    if (dash) el.setAttribute("stroke-dasharray", "4 4");
     svg.append(el);
   };
   if (values.length) {
     const step = values.length > 1 ? w / (values.length - 1) : 0;
     line(values.map((v, i) => `${i * step},${h - (v / max) * h}`).join(" "), "#0b5");
   }
-  line(`0,${h - (passLine / max) * h} ${w},${h - (passLine / max) * h}`, "#d33");
+  line(`0,${h - (passLine / max) * h} ${w},${h - (passLine / max) * h}`, "#d33", true);
   return svg;
+}
+
+function row(text) {
+  return Object.assign(document.createElement("p"), { textContent: text });
 }
 
 async function main() {
@@ -3452,34 +3933,36 @@ async function main() {
 
   panel(S.stats.scores).append(sparkline(data.scores.map((s) => s.score), 60));
 
-  const pace = panel(S.stats.pace);
-  pace.append(Object.assign(document.createElement("p"), {
-    textContent: `${data.pace_seconds_per_question ?? "—"} s / ${data.official_pace_seconds} s`,
-  }));
-
-  const missed = panel(S.stats.missed);
-  for (const row of data.most_missed) {
-    missed.append(Object.assign(document.createElement("p"),
-      { textContent: `${row.qkey} ×${row.wrong_count}` }));
-  }
-
   const banks = panel(S.stats.perBank);
   for (const b of data.per_bank) {
-    banks.append(Object.assign(document.createElement("p"), {
-      textContent: `${b.title} — ${b.n_questions} 題 · ${S.portal.stars} ${b.stars} · ${S.portal.defects} ${b.defects}`,
-    }));
+    banks.append(row(
+      `${b.title} — ${S.stats.latest} ${b.latest_score ?? "—"} · ${S.stats.best} ${b.best_score ?? "—"}` +
+      ` · ${S.stats.attempts} ${b.attempts} · ${b.n_questions} 題` +
+      ` · ${S.portal.stars} ${b.stars}${b.defects ? ` · ${S.portal.defects} ${b.defects}` : ""}`,
+    ));
+  }
+
+  const missed = panel(S.stats.missed);
+  if (!data.most_missed.length) missed.append(row(S.stats.none));
+  for (const item of data.most_missed) {
+    const a = document.createElement("a");
+    a.href = `/exam?q=${encodeURIComponent(item.qkey)}`;
+    a.textContent = `×${item.wrong_count} · ${item.bank_title} 第${item.ordinal}題 — ${item.snippet}`;
+    missed.append(a, document.createElement("br"));
   }
 
   const trend = panel(S.stats.trend);
-  trend.append(Object.assign(document.createElement("p"),
-    { textContent: `${S.portal.stars} ${data.stars} · ${S.portal.defects} ${data.defects}` }));
+  trend.append(row(`${S.portal.stars} ${data.stars} · ${S.portal.defects} ${data.defects}`));
+
+  const pace = panel(S.stats.pace);
+  pace.append(row(`${data.pace_seconds_per_question ?? "—"} s / ${data.official_pace_seconds} s`));
 }
 main();
 ```
 
 - [ ] **Step 2: Verify in the browser**
 
-Open `/stats` after sitting two Papers. Confirm five panels in order, the 60-point line drawn, pace against 108 s, and the Defect count matching `check`.
+Open `/stats` after sitting two Papers. Confirm five panels in order; the 60-point line drawn; pace against 108 s; panel 2 showing each Bank's latest score, best score and attempt count; every most-missed row carrying its stem snippet and opening a one-Question Drill when clicked; and the Defect count reading 28, matching `check`.
 
 - [ ] **Step 3: Commit**
 
@@ -3514,14 +3997,14 @@ Body sections, in this order:
 
 - [ ] **Step 2: Write the two references**
 
-`references/material-format.md`: both Bank shapes verbatim, the parser-tolerance table from the spec, the Defect heuristics with their measured counts, and the skeleton emitted by `new`.
+`references/material-format.md`: both Bank shapes verbatim; both Shared Stem conventions and the folding rule with its attribution format (ADR 0011); the line-attribution rule and its `---`/`《以下空白》` whitelist (ADR 0012); the three Defect kinds with their measured counts (3 / 25 / 0) and the declared-versus-inferred distinction; the skeleton emitted by `new` in both shapes.
 
 `references/db-schema.md`: the `main` and `cat` schemas, why keys are natural (ADR 0002/0007), and the export/import contract (ADR 0009).
 
 - [ ] **Step 3: Run the full test suite**
 
 Run: `cd skills/wens-tutor && uv run --python 3.14 python3 -m unittest discover -s tests -v`
-Expected: all tests pass — 19 in `test_parser.py`, 25 in `test_rules.py`.
+Expected: all tests pass — 29 in `test_parser.py`, 30 in `test_rules.py`.
 
 - [ ] **Step 4: Desktop smoke run against the real Materials Root**
 
@@ -3531,9 +4014,21 @@ uv run --python 3.14 python3 scripts/tutor.py check ; echo "exit=$?"
 uv run --python 3.14 python3 scripts/tutor.py serve --port 8765 --open
 ```
 
-Confirm, in order: portal shows 2 Subjects / 4 Course cards / 11 Bank cards / 26 Defects; a Highlight survives a server restart; renaming a Bank file and restarting keeps its Stars (then rename it back); a wrong answer stars a Question, two consecutive corrects clear it, a manual Star survives; a Drill contains exactly the Starred Questions; a 20-Question Paper counts down 36:00 and auto-submits at zero; Lookup from a Question opens the 學習指引 Section in a new window; ticking one leaf Section moves 科目1's progress by 1/57; `export`, delete `tutor.db`, `import`, everything returns.
+Confirm, in order: `check` prints 28 findings (3 `no_answer`, 25 `figure_missing`, 0 `unattributed_lines`) and exits 1; the portal shows 2 Subjects, 4 Course cards **including both 學習指引**, 11 Bank cards, 28 Defects; a Highlight survives a server restart; renaming a Bank file and restarting keeps its Stars (then rename it back); editing one Question's stem and restarting keeps that Question's Star, and `check` reports the relink; a wrong answer stars a Question, two consecutive corrects clear it, a manual Star survives; a Drill contains exactly the Starred Questions; a 20-Question Paper counts down 36:00, does **not** reset when you move between Questions, and auto-submits at zero; one of the 18 folded Questions renders its `共用題幹` blockquote above its own stem; the in-flight `/api/attempt/<id>` response contains no `answer` and no `explanation_md`; Lookup from a Question opens the 學習指引 Section in a new window; ticking one leaf Section moves 科目1's progress by 1/57; the header shows a `git describe` version; `export`, delete `tutor.db`, `import`, everything returns.
 
-- [ ] **Step 5: Phone smoke run over the private network**
+- [ ] **Step 5: Adversarial pass — the five rules that fail silently**
+
+Each of these produced a real defect in review, so each is exercised by hand once against the real root:
+
+| Rule | How to break it | Expected |
+|---|---|---|
+| Line attribution | append `> ※ 一行沒人認領的字` inside a Question region | `check` reports `unattributed_lines` for that Question and it leaves the default pool |
+| Shared-stem folding | delete one `> 以下第…題共用題幹：` line | the 3 members lose their preamble, their `qkey`s change, `check` reports 3 relinks |
+| Declared Defect | delete a `※ …請對照原始 PDF` line from a Question with no figure keyword | `figure_missing` drops from 25 to 24 |
+| Skeleton collapse | `new bank` with `--questions 10`, then `check` | 10 Questions parsed, no `collapsed skeleton Questions` finding |
+| Answer withholding | open DevTools, read the in-flight payload | no `answer`, no `explanation_md`, no option marked correct |
+
+- [ ] **Step 6: Phone smoke run over the private network**
 
 ```bash
 uv run --python 3.14 python3 scripts/tutor.py serve --bind 0.0.0.0 --port 8765
@@ -3541,9 +4036,9 @@ uv run --python 3.14 python3 scripts/tutor.py serve --bind 0.0.0.0 --port 8765
 
 On the phone, over the virtual network: the tokenised URL admits and a bare URL returns 403; the selection bar sits at the bottom edge and creates a Highlight; Lookup opens as a slide-over, not a new tab; a 10-Question Paper is answerable end to end; record the render time of the 292 KB guide (`performance.now()` around `renderInto`) and note it in the CHANGELOG entry. If it exceeds 1 s, open a follow-up task for chapter-scoped rendering on touch hosts only (ADR 0010).
 
-- [ ] **Step 6: CHANGELOG and commit**
+- [ ] **Step 7: CHANGELOG and commit**
 
-Append one `Unreleased` entry dated today describing the new skill, the engine, the four pages, both hosts, and the measured phone render time.
+Append one `Unreleased` entry dated today describing the new skill, the engine, the four pages, both hosts, the measured Defect counts, and the measured phone render time.
 
 ```bash
 git add skills/wens-tutor CHANGELOG.md
@@ -3554,8 +4049,10 @@ git commit -m "feat(wens-tutor): add courseware review skill with study site"
 
 ## Self-Review
 
-**Spec coverage.** Problem/Scope → Tasks 11–17. Ground truth → Tasks 1–3 assertions. Constraints 1–5 → Task 10 (`safe_material_path` refuses symlinks; only a registered root is walked) and Task 4 (content sniffing, no FTS). Architecture/file tree → File Structure table. Path problem → Task 10 routes. Hosts and access → Tasks 10, 12, 17 Step 5. Catalogue → Task 4. Identity/user state → Tasks 5, 9. Material format (both shapes, tolerances, Defects) → Tasks 2, 3. Annotation anchoring → Task 12 (`anchor`, `quoteFromSelection`) and Task 14 (orphan `PATCH`). Sitting a Paper (composition, shuffle, timing, resumption, grading, Star lifecycle, result view) → Tasks 6, 15. Web surface (4 pages, render evidence, chrome, layout, keyboard) → Tasks 12–16. Lookup → Tasks 7, 14, 15. CLI incl. exit codes → Task 11. Agent workflows/triggers → Task 17. Verification → Tasks 1–3, 6–10, 17.
+**Spec coverage.** Problem/Scope → Tasks 11–17. Ground truth → Tasks 1–3 assertions. Constraints 1–5 → Task 10 (`safe_material_path` refuses symlinks; only a registered root is walked) and Task 4 (content sniffing, no FTS). Architecture/file tree → File Structure table. Path problem → Task 10 routes. Hosts and access → Tasks 10, 12, 17 Step 6. Catalogue → Task 4. Identity/user state → Tasks 5, 9. Material format (both Bank shapes, Shared Stem folding, line attribution, Defects) → Tasks 2, 3. Annotation anchoring → Task 12 (`anchor`, `quoteFromSelection`) and Task 14 (orphan `PATCH`). Sitting a Paper (composition, shuffle, timing, resumption, grading, Star lifecycle, result view) → Tasks 6, 15. Web surface (4 pages, render evidence, chrome, layout, keyboard) → Tasks 12–16. Lookup → Tasks 7, 14, 15. CLI incl. exit codes → Task 11. Agent workflows/triggers → Task 17. Verification → Tasks 1–3, 6–10, 17.
 
-**Placeholder scan.** No TBDs. Every code step carries real code. The two documentation steps in Task 17 enumerate exact sections and sources rather than saying "write docs". The one judgement call left open is deliberate and bounded: if the phone render exceeds 1 s, a follow-up task is opened — the threshold and the fallback are both named.
+**Grilling-round coverage.** ADR 0011 (Shared Stem folding) → Task 2 Steps 1/3/5, Task 4 (`shared_span` column), Task 15 (rendered stem). ADR 0012 (line attribution) → Task 2 `split_block`, Task 3 `defects_for`, Task 11 `check`. ADR 0013 (answers withheld) → Task 8 `_questions_of_attempt` and `submit` detail, Task 15 result view. Slot relink → Task 5. Declared Defects → Tasks 2, 3, 11. Portal dual listing → Task 13. Deadline derived once → Task 15. Version from `git describe` → Tasks 10, 13. No manifest icons → Task 12. `--shape` and unique skeleton stems → Task 11. Per-Bank statistics and linked most-missed → Tasks 6, 16.
 
-**Type consistency.** `parse_sections`/`parse_exam_bank`/`parse_guide_banks`/`defects_for`/`parse_file` (Tasks 1–3) are consumed with those exact names in `catalog.build` (Task 4) and `cmd_check` (Task 11). `state.open_root`/`reconcile`/`export_json`/`import_json`/`json_path`/`db_path` (Tasks 5, 9) match their uses in Tasks 6–11. `compose.compose/start_attempt/answer/submit/toggle_star/remaining_ms/stats/lookup` (Tasks 6, 7) match `api.handle` (Task 8) and `tutor.py` (Task 11). The API paths in Task 8 are exactly those fetched in Tasks 13–16. `render.renderInto/blocks/anchor/quoteFromSelection` and `host.isTouch/openLookupResult/mountSelectionBar` (Task 12) are used with those names in Tasks 14–15. Criteria keys (`bkeys`, `cap`, `shuffle`, `timed`, `include_defective`, `drill`) are identical in Tasks 6, 8, 15.
+**Placeholder scan.** No TBDs. Every code step carries real code, and the parser in Tasks 1–3 was executed against the real corpus before it was written down — the numbers in its assertions are measurements, not estimates. The two documentation steps in Task 17 enumerate exact sections and sources rather than saying "write docs". The one judgement call left open is deliberate and bounded: if the phone render exceeds 1 s, a follow-up task is opened — the threshold and the fallback are both named.
+
+**Type consistency.** `parse_sections`/`parse_exam_bank`/`parse_guide_banks`/`find_shared_stems`/`shared_for`/`fold_shared`/`split_block`/`defects_for`/`parse_file` (Tasks 1–3) are consumed with those exact names in `catalog.build` (Task 4) and `cmd_check` (Task 11). `Question` carries `shared_span`, `declared_defect` and `unattributed` in every producer and consumer. `state.open_root`/`reconcile`/`record_slots`/`export_json`/`import_json`/`json_path`/`db_path` (Tasks 5, 9) match their uses in Tasks 6–11. `compose.compose/start_attempt/answer/submit/toggle_star/remaining_ms/stats/lookup` (Tasks 6, 7) match `api.handle` (Task 8) and `tutor.py` (Task 11). The API paths in Task 8 are exactly those fetched in Tasks 13–16, including `GET /api/version`. `render.renderInto/blocks/anchor/quoteFromSelection` and `host.isTouch/openLookupResult/mountSelectionBar` (Task 12) are used with those names in Tasks 14–15. Criteria keys (`bkeys`, `cap`, `shuffle`, `timed`, `include_defective`, `drill`) are identical in Tasks 6, 8, 15.

@@ -19,3 +19,11 @@ edit in PDF-derived material and must not cost the human their review history.
 with byte-identical stems and options collapse to one identity; in this corpus there are
 none, and if a Bank ever repeats a Question verbatim, treating them as the same Question is
 the desired behaviour anyway.
+
+A generated Bank skeleton must give every placeholder Question a distinct stem
+(`（第 N 題題幹）`): identical placeholder text produces identical keys, and `INSERT OR IGNORE`
+then silently collapses ten Questions into one.
+
+Relinking after a stem edit needs a **Slot** record — `question_slot(qkey, bkey, ordinal, ts)`
+written at every parse. Without it the only available fallback is "exactly one free slot in
+the Bank", which resolves in a one-Question fixture and fails at 270.
