@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-13 — feat(wens-tutor): add courseware review skill with study site
+
+`skills/wens-tutor/` ships complete: SKILL.md, two reference docs, and the real-device smoke
+run that closes the 17-task plan. Adds the `wens-tutor` skill — a stdlib-only Python engine
+(`scripts/tutor.py` + `tutorlib/`: `parser`, `catalog`, `state`, `compose`, `registry`, `api`,
+`server`) plus a vanilla-JS study site (`web/`: portal, reader, exam, stats) that turns a
+Markdown courseware tree into a study site with persistent annotations, timed mock papers,
+wrong-answer drilling, and cross-referencing lookup — no npm, no build step, no third-party
+Python packages.
+
+- `skills/wens-tutor/SKILL.md`: New — triggers on 複習 / 開始讀書 / 模擬考 / 出卷 / 重點題 /
+  複習進度 / 補答案 / 補圖 and their English equivalents; dispatches to `serve`, sitting a Paper,
+  drilling Stars, `check`, or one of the three content-repair workflows; states the hard rule
+  that the engine never writes to a Material File and the agent does so only in those three
+  workflows, only when asked, only after `git status` on the Materials Root.
+- `skills/wens-tutor/references/material-format.md`, `references/db-schema.md`: New — both Bank
+  shapes verbatim, the two Shared Stem conventions and the folding rule (ADR 0011), the
+  line-attribution rule and its `---`/`《以下空白》` whitelist (ADR 0012), the `new bank` skeleton,
+  the `main`/`cat` schemas, why every key is content- or path-derived rather than a surrogate
+  (ADR 0002/0007), and the export/import contract (ADR 0009).
+- **Both hosts verified against the real Materials Root** (`~/repos/wenswiki/wenswiki/work/平台/
+  2026_AI應用規劃師`, 270 Questions / 11 Banks / 2 Subjects / 4 Course cards): desktop —
+  `check` prints 28 findings and exits 1; the portal shows the exact catalogue counts; a
+  Highlight, a Bank rename, and a stem edit all survive a server restart with Stars intact and
+  the stem-edit relink reported; a wrong answer stars a Question, two consecutive corrects clear
+  it, a manual Star never auto-clears; a Drill holds exactly the 36 currently-starred Questions;
+  a 20-Question Paper counts down 36:00 without resetting on navigation and auto-submits at
+  zero; a folded Question renders its `共用題幹` blockquote; the in-flight attempt payload carries
+  no `answer`/`explanation_md`; `export` → delete `tutor.db` → `import` restores every row.
+  Touch/private-network — `serve --bind 0.0.0.0` admits a tokenised LAN request (200) and
+  refuses a bare one (403); the selection bar docks to the bottom edge and creates a Highlight
+  under real tap events; Lookup opens as an in-page slide-over, never a new window; a 10-Question
+  Paper is answerable end to end by tap.
+- **Defect counts, measured:** 28 total — 3 `no_answer`, 25 `figure_missing` (18 declared ∪ 24
+  inferred), 0 `unattributed_lines`.
+- **Render time, substituted for a physical phone** (none attached to this environment; the
+  `browser` tool's touch/mobile viewport plus 4× CPU throttling stood in, per ADR 0010's own
+  3–5× desktop/phone estimate): `renderInto` on the largest guide (292,492 bytes, 1,330 blocks,
+  科目3) measured **43.6 ms** throttled (14.3 ms unthrottled) — well under the 1 s threshold, so
+  no chapter-scoped-rendering follow-up is needed.
+- Adversarial pass (five rules that fail silently, exercised against scratch copies of the
+  affected exam files, never the real root): an unattributed line trips `unattributed_lines` and
+  drops the Question from the default pool; deleting a shared-stem header (with Stars seeded on
+  the pre-edit qkeys) changes 3 qkeys and `check` reports exactly 3 relinks; deleting the one
+  declared-only marker drops `figure_missing` by exactly one; a generated 10-Question skeleton
+  parses to 10 distinct Questions with no `collapsed_questions` finding; the in-flight payload
+  withholds the answer.
+- Full suite green: 60 tests (29 `test_parser.py`, 31 `test_rules.py` — one more than the
+  plan's original 30 after Task 13's Course-card `leaf_sections` fix added a regression test).
+
+
 ### 2026-08-13 — docs(wens-tutor): fourth grilling round — the plan was executed, not just read
 
 The implementation plan's own code blocks were extracted and run against the real corpus. Eight
