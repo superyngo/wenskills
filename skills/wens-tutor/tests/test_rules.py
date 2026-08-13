@@ -300,6 +300,9 @@ class TestApi(unittest.TestCase):
         course = next(f for f in files if f["relpath"].endswith("course.md"))
         self.assertEqual(course["leaf_sections"], 1)
         self.assertEqual(course["read_sections"], 0)
+        # A whole-file exam Bank consumes every leaf section: no Course prose remains.
+        bank_file = next(f for f in files if f["relpath"].endswith("bank.md"))
+        self.assertEqual(bank_file["leaf_sections"], 0)
 
     def test_annotation_round_trip_and_orphan_patch(self):
         code, ann = api.handle(
@@ -358,6 +361,34 @@ class TestApi(unittest.TestCase):
     def test_unknown_route_is_404(self):
         code, _ = api.handle(self.conn, "GET", "/api/nope", {}, None)
         self.assertEqual(code, 404)
+
+
+class TestPortalCourseProse(unittest.TestCase):
+    """A leaf section that is also a Bank's root path is Bank content, not Course prose."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "科目A").mkdir()
+        (self.tmp / "科目A" / "guide.md").write_text(
+            "# 標題\n\n## 1 練習\n\n### 選擇題\n\n1. 題幹一\n"
+            "   - （A）甲\n   - （B）乙\n   - （C）丙\n   - （D）丁\n\n"
+            "### 解答與解析\n\n**1. Ans（A） 甲**\n\n解析：內容\n",
+            encoding="utf-8",
+        )
+        self.conn = state.open_root(self.tmp)
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.tmp)
+
+    def test_guide_bank_root_section_excluded_from_leaf_sections(self):
+        code, data = api.handle(self.conn, "GET", "/api/portal", {}, None)
+        self.assertEqual(code, 200)
+        f = data["subjects"][0]["files"][0]
+        self.assertEqual(len(f["banks"]), 1)
+        # 2 leaf sections total (選擇題, 解答與解析); the Bank's own root ("選擇題")
+        # is Bank content, not Course prose, so only 解答與解析 counts.
+        self.assertEqual(f["leaf_sections"], 1)
 
 class TestExportImport(unittest.TestCase):
     def setUp(self):

@@ -98,8 +98,15 @@ def handle(conn, method, path, query, body):
         subjects = {}
         for f in conn.execute("SELECT * FROM cat.file ORDER BY relpath"):
             s = subjects.setdefault(f["subject"], {"subject": f["subject"], "files": []})
+            # Prose-only leaf count: a leaf section that is itself a Bank's root path is
+            # Bank content, not Course prose; a whole-file exam Bank (path='') consumes
+            # every leaf section in the file, leaving no Course prose at all.
             leaf = conn.execute(
-                "SELECT count(*) AS n FROM cat.section WHERE fid=? AND is_leaf=1", (f["fid"],)
+                "SELECT count(*) AS n FROM cat.section s"
+                " WHERE s.fid=? AND s.is_leaf=1"
+                " AND s.path NOT IN (SELECT b.path FROM cat.bank b WHERE b.fid=s.fid)"
+                " AND NOT EXISTS (SELECT 1 FROM cat.bank b WHERE b.fid=s.fid AND b.path='')",
+                (f["fid"],),
             ).fetchone()["n"]
             read = conn.execute(
                 "SELECT count(*) AS n FROM progress WHERE fid=?", (f["fid"],)
