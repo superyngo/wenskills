@@ -9,7 +9,7 @@ Papers unless explicitly included, and reports them; repair happens by Backfilli
 from the original PDFs that sit beside the Markdown in `source/`.
 
 Without this, the mock Paper looks complete while systematically skipping an entire Question
-type, and 8 of the 25 are silently degraded — their stem says "下圖" with no note that anything
+7 of the 25 are silently degraded — their stem says "下圖" with no note that anything
 is missing, so nothing on screen would reveal the omission.
 
 ## Consequences
@@ -18,10 +18,11 @@ The `figure_missing` keyword heuristic (a reference such as 下圖/上表/程式
 block, table, or image anywhere in the Question) is conservative and will occasionally accuse a
 Question that reads fine; the report is advisory and inclusion is one flag away.
 
-Of the 25 `figure_missing`, 10 are **declared** — the transcriber wrote the omission down in
-words (a line such as `※ …請對照原始 PDF`) — and the keyword heuristic supplies the rest. The
-declared form is authoritative, and two Questions (114-科3 第45題, 第47題) are reachable only
-through the declaration.
+Of the 25 `figure_missing`, 18 are **declared** — the transcriber wrote the omission down in
+words (one of three conventions: `※ …請對照原始 PDF`, `〔註：…於此省略。〕`, or `見原始 P`) — and the
+keyword heuristic fires on 24. The two sets overlap on 17, giving a union of 25 (7 inferred-only,
+1 declared-only). The declared form is authoritative, and one Question (114-科3 第45題) is reachable
+only through its declaration.
 
 A third kind, `unattributed_lines`, exists so that a line the parser cannot place in a stem,
 option, answer, Explanation, or Shared Stem is reported instead of dropped. It is currently 0;
