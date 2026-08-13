@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-13 — docs(wens-tutor): third grilling round — measured render, install baseline, JSON export
+
+- `skills/wens-tutor/docs/adr/0008-no-service-worker.md`: New — the site installs (manifest,
+  standalone display) but deliberately ships **no service worker**, a recorded deviation from
+  `ui-design-principles` 23: all content comes from the local server, so an offline shell would
+  load a UI with no courses, no questions and no way to persist an answer — a screen that looks
+  usable and is not.
+- `skills/wens-tutor/docs/adr/0009-json-export-beside-the-database.md`: New — `export`/`import`
+  keep a diffable JSON copy of user state committed beside the binary `tutor.db`, turning git's
+  inability to merge SQLite from "pick a side and discard the other device's attempts" into a real
+  merge, and DB loss from total to recoverable.
+- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Client render cost is now **measured,
+  not assumed** — headless Chromium with vendored markdown-it renders the largest file (292 KB,
+  1330 blocks, 3777 DOM nodes) in 82 ms cold / 26 ms warm, and restoring 200 annotations by naive
+  scan costs 18 ms, so chunked rendering, TOC virtualisation, `content-visibility` and any anchor
+  index are all struck from the design. Adds the composition form (6 fixed fields; defaults 50
+  questions / all banks / shuffled / timed / defects off), shuffle policy (questions yes, options
+  never — shuffled options would invalidate all 70 official explanations that name `Ans（B）`),
+  countdown computed from `started` so a throttled tab cannot gain time, `tests/test_rules.py`
+  covering the five silently-failing rules at the pure-function layer, `export`/`import`
+  subcommands, and the chrome/layout contract (build-stamped version, Help/About panel, fluid
+  resize-aware columns, desktop-only target while the server binds 127.0.0.1).
+
 ### 2026-08-13 — docs(wens-tutor): second grilling round — banks are regions, +70 official questions
 
 - `skills/wens-tutor/docs/adr/0006-bank-is-a-region-not-a-file.md`: New — a Bank is a region of a

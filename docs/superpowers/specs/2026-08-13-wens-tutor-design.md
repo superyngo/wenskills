@@ -1,7 +1,7 @@
 # wens-tutor skill — design
 
 Domain vocabulary: [`skills/wens-tutor/CONTEXT.md`](../../../skills/wens-tutor/CONTEXT.md).
-Decisions: [`skills/wens-tutor/docs/adr/`](../../../skills/wens-tutor/docs/adr/) (0001–0007).
+Decisions: [`skills/wens-tutor/docs/adr/`](../../../skills/wens-tutor/docs/adr/) (0001–0009).
 Terms defined there — Materials Root, Subject, Material File, Course, Bank, Section, Question,
 Defect, Paper, Attempt, Drill, Star, Annotation, Orphan, Progress, Lookup, Backfill,
 Explanation — are used here with exactly those meanings.
@@ -107,7 +107,7 @@ task); the engine owns presentation (a deterministic task).**
 skills/wens-tutor/                  the engine, in the wenskills repo
   SKILL.md                          agent workflow + triggers
   CONTEXT.md                        domain glossary
-  docs/adr/0001…0007                decisions
+  docs/adr/0001…0009                decisions
   references/material-format.md     both Question shapes, parser tolerances, Defect rules
   references/db-schema.md           user-state schema + key-stability rationale
   scripts/tutor.py                  CLI: arg parsing and dispatch only
@@ -118,15 +118,16 @@ skills/wens-tutor/                  the engine, in the wenskills repo
   scripts/tutorlib/server.py        ThreadingHTTPServer, routes, path containment
   scripts/tutorlib/api.py           JSON endpoints
   web/index.html web/reader.html web/exam.html web/stats.html
-  web/app/*.js  web/style.css  web/strings.js
+  web/app/*.js  web/style.css  web/strings.js  web/manifest.webmanifest
   web/vendor/markdown-it.min.js     vendored; no npm, no build step
-  tests/test_parser.py
+  tests/test_parser.py  tests/test_rules.py
 
 ~/.config/wens-tutor/roots.json     device-local registry: roots, default root, port
 
 <Materials Root>/                   the content, in the ipas-ai-planner-2026 repo
   <Subject>/*.md                    modified only by the agent or the human, never the engine
   .tutor/tutor.db                   user state only (ADR 0001), committed
+  .tutor/tutor.json                 the same state, diffable (ADR 0009), committed
 ```
 
 Python is stdlib-only, so any interpreter ≥3.9 runs it; the skill invokes it as
@@ -282,16 +283,35 @@ says so.
 
 ## Sitting a Paper
 
-**Composition.** Criteria: Subject, Bank (any of the 11, by `bkey`), question cap, shuffle, and
-Drill mode (Starred only). Defective Questions are excluded unless `include_defective`
-(ADR 0004). Criteria and the resulting `qkeys` are stored as a `paper` row, so an Attempt is
+**Composition.** Six fields, in this fixed order (`ui-design-principles` 2 locks field order),
+with these defaults:
+
+| Field | Default | Note |
+|---|---|---|
+| Subject | all | |
+| Bank | all 11 | includes the 7 guide practice regions alongside the 4 exam papers |
+| Question cap | 50 | the official paper size |
+| Shuffle | on | Questions only — see below |
+| Timed | on | 108 s per Question |
+| Include defective | off | ADR 0004 |
+
+Drill is not a field on this form: it is a separate portal entry point, because "Starred only,
+untimed" is a different thing to compose, and folding it in would allow self-contradicting
+combinations. Criteria and the resulting `qkeys` are stored as a `paper` row, so an Attempt is
 reproducible and two Attempts of one Paper are comparable.
+
+**Shuffle covers Questions, never options.** Shuffled options would put the UI's letters out of
+step with the Markdown, and would invalidate all 70 official Explanations, which name their
+answer as `Ans（B）`. The accepted cost is that repeated Drills teach the position of an answer
+as well as its content; losing the official Explanations would cost more.
 
 **Timing.** A Paper is timed at the official rate — 90 minutes per 50 Questions, i.e. 108 s per
 Question, scaled to the Paper's size (20 Questions → 36 minutes) so the pacing pressure is real
 rather than decorative. `limit_ms` can be switched off; Drills are always untimed. The countdown
 is **wall-clock**: closing the tab does not pause the exam, because the exam hall does not.
-Reaching zero auto-submits.
+Remaining time is always computed as `limit_ms - (now - started)`, never accumulated from frame
+deltas, so a throttled or backgrounded tab cannot gain the candidate time. Reaching zero
+auto-submits.
 
 **Resumption.** At most one Attempt per Paper is in flight; the portal shows it as a
 「進行中」 card. Each answer is `PUT` as it is given, so nothing is lost. Reopening after the
@@ -320,6 +340,19 @@ one — `ui-design-principles` 22; the UI is zh-TW, but the strings live in one 
 Markdown renders client-side (vendored markdown-it): required anyway, because Annotation
 anchoring operates on the rendered DOM, and server-rendering would split that logic across two
 languages.
+
+Rendering the largest Material File in one pass is measured, not assumed — headless Chromium,
+vendored markdown-it, with the `data-line` stamping rule active:
+
+| File | Blocks | DOM nodes | parse | render | innerHTML | layout | total |
+|---|---|---|---|---|---|---|---|
+| 學習指引 科3 (292 KB, cold) | 1330 | 3777 | 14.7 ms | 1.7 ms | 3.4 ms | 62.6 ms | **82.4 ms** |
+| 學習指引 科3 (warm) | 1330 | 3777 | 3.4 ms | 0.5 ms | 3.2 ms | 18.7 ms | **25.8 ms** |
+| cheatsheet L23 (115 KB) | 425 | 3482 | 3.1 ms | 0.7 ms | 3.7 ms | 12.8 ms | **20.3 ms** |
+
+Restoring 200 Annotations by the naive scan (200 quotes × 1330 blocks) costs **17.6 ms**. So
+there is no chunked rendering, no virtualised TOC, no `content-visibility`, and no anchor index:
+the whole file renders at once and the dumbest anchoring loop is fast enough.
 
 **Portal (`index.html`)** — catalogue joined against user state: Subjects, then Course cards
 (Progress bar = ticked leaf Sections / leaf Sections, Annotation count, Orphan count) and Bank
@@ -353,6 +386,19 @@ and PgUp/PgDn/Home/End scroll every overflowing surface including the Annotation
 Lookup popup; in the exam, `1`–`4`/`A`–`D` select an option, `Space` cycles options, `←`/`→`
 move between Questions, and the focused Question is always visibly unique.
 
+**Chrome and install** (`ui-design-principles` 18, 23; ADR 0008): a header carrying the app name
+and a build-stamped version, one switchable Help/About panel single-sourced from the same
+metadata, and a web manifest with `standalone` display so the site installs as its own window.
+**No service worker** — the deviation and its reasoning are recorded in ADR 0008, because the
+absence otherwise reads as an oversight.
+
+**Layout** (`ui-design-principles` 19): fluid and resize-aware — no hardcoded widths, the
+reader's TOC/content/annotation columns collapse to fewer columns as width shrinks, and popups
+obey responsive size caps. Target host is a desktop browser on the machine running `serve`;
+touch hosts are out of scope while the server binds 127.0.0.1 only, and would be a shared
+component with per-host adaptation rather than media-query bolt-ons if that ever changes
+(principle 2).
+
 ## CLI
 
 | Subcommand | Behaviour |
@@ -364,11 +410,14 @@ move between Questions, and the focused Question is always visibly unique.
 | `new bank <subject> <title> [--questions N] [--shape exam\|guide]` | write a Bank skeleton in the chosen parseable shape |
 | `serve [--root] [--port] [--open]` | bind 127.0.0.1 only; three route families |
 | `stats [--root]` | the same five panels as text, for terminal and agent use |
+| `export [--root]` | write all user state to `.tutor/tutor.json` — diffable, mergeable, committed (ADR 0009) |
+| `import [--root] [--merge]` | rebuild the database from `tutor.json`; `--merge` unions two devices' rows instead of replacing |
 
 `check` findings: Defects by kind and Question; files holding a `第 N 題` heading that parse to
 zero Questions; Questions whose option count is not 4; a `選擇題` region with no sibling
 `解答與解析`, or a count mismatch between them; relinked and unresolvable `qkey`s; read-ticks
-whose Section path is gone; Orphan Annotations; registered-but-missing roots.
+whose Section path is gone; Orphan Annotations; registered-but-missing roots; a `tutor.json`
+older than the newest row in `tutor.db` (ADR 0009).
 
 `serve` runs as a supervised long-lived process (`hub` with a port readiness check), reports
 `http://127.0.0.1:<port>/`, and does not block the session that started it.
@@ -396,7 +445,8 @@ and produces better output because the judgement is done by the component capabl
 
 **Hard rule for `SKILL.md`:** the engine never writes to a Material File, and the agent writes
 to one only in these three workflows, only when asked, and only after checking the materials
-repo's git state (per `~/.claude/CLAUDE.md`).
+repo's git state (per `~/.claude/CLAUDE.md`). Before any commit of the Materials Root, run
+`export` so the JSON recovery/merge artifact matches the database (ADR 0009).
 
 **Triggers:** 複習 / 開始讀書 / 模擬考 / 出卷 / 重點題 / 複習進度 / 補答案 / 補圖, plus their
 English equivalents (review, mock exam, drill, study progress).
@@ -410,7 +460,17 @@ English equivalents (review, mock exam, drill, study progress).
    - the two cheatsheets parse to zero Questions (strict-pattern regression);
    - zero Section-path collisions across all eight files;
    - `qkey` stable across two consecutive parses.
-2. End-to-end smoke on the real Materials Root, not a fixture:
+2. `tests/test_rules.py` — the five rules that fail silently rather than crashing, tested at the
+   pure-function layer (`compose.py`, `state.py`), never through HTTP:
+   - the Star lifecycle: wrong → Star; correct → Star holds; correct again → Star clears; a
+     `manual` Star survives all three;
+   - `qkey` stability, and relink by `(bkey, ordinal)` after a stem edit;
+   - composition excludes Defects, and includes them when asked;
+   - an Attempt reopened past its limit submits what was answered and sets `expired`;
+   - Lookup's right-shortening stops at 4 characters and reports the query it used.
+   No tests are written for the HTTP layer: its logic is path containment plus JSON
+   serialisation, and the smoke run covers it.
+3. End-to-end smoke on the real Materials Root, not a fixture:
    - highlight a passage, restart `serve`, confirm it restores; highlight a Question stem too;
    - rename a Material File, restart, confirm Stars, Notes and Attempt history follow it;
    - answer one Question wrong, confirm the Star appears; answer it right twice, confirm it
@@ -420,8 +480,10 @@ English equivalents (review, mock exam, drill, study progress).
      with the countdown still falling, and auto-submits at zero;
    - select a phrase in a Question, confirm the 課程 tab lists a matching 學習指引 Section, the
      考古題 tab lists other Questions on the same concept, and the new window scrolls to it;
-   - tick a leaf Section, confirm the portal's Progress bar moves by exactly 1/57 for 科目1.
-3. `check` exits 1 on the current corpus (26 Defects) and 0 once they are Backfilled; exits 2
+   - tick a leaf Section, confirm the portal's Progress bar moves by exactly 1/57 for 科目1;
+   - `export`, delete the database, `import`, confirm every Star, Annotation, Note and Attempt
+     returns byte-identical (ADR 0009).
+4. `check` exits 1 on the current corpus (26 Defects) and 0 once they are Backfilled; exits 2
    for an unregistered root — the three-level contract is proven, not assumed.
 
 ## Decisions
@@ -446,3 +508,10 @@ English equivalents (review, mock exam, drill, study progress).
 | `check` exits 0/1/2 | 0/1 | the agent must distinguish "repair the content" from "the tool is broken" |
 | Derived statistics | aggregate columns | no second copy of the truth |
 | Agent-driven Backfill | an `import-url` subcommand | no HTML→Markdown converter to maintain; the figure sources are local PDFs anyway |
+| Installable, no service worker (ADR 0008) | full offline-first PWA | the data lives behind the local server; an offline shell would load a UI with no content and no way to persist an answer |
+| Externalised strings, one language | inline zh-TW strings | one `strings.js` costs nothing now and is a rewrite later (`ui-design-principles` 22) |
+| JSON export beside the database (ADR 0009) | the binary database alone | git cannot merge SQLite: two devices would discard one side's Attempts, and a corrupt file would lose everything |
+| Shuffle Questions, never options | shuffle both | shuffled options invalidate all 70 official Explanations, which name their answer as `Ans（B）` |
+| Composition defaults: 50 Questions, all Banks, shuffled, timed, defects off | ask every time; remember the last Paper | the default is the official paper shape, so the common case is one click |
+| Rules tested at the pure-function layer; HTTP smoke-tested only | full HTTP test suite | the five rules fail silently, so they need assertions; the HTTP layer is path containment plus JSON |
+| Remaining time from `started`, never accumulated | tick-based countdown | a backgrounded tab is throttled, so accumulation hands the candidate free time |
