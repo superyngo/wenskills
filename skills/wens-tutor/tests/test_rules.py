@@ -225,3 +225,51 @@ class TestRules(unittest.TestCase):
         self.assertTrue(result["expired"])
         self.assertEqual(result["total"], 2)
         self.assertEqual(result["correct"], 1)
+
+
+class TestLookup(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "科目A").mkdir()
+        (self.tmp / "科目A" / "course.md").write_text(
+            "# 章\n\n## 詞嵌入\n\n| 名稱 | 說明 |\n| --- | --- |\n| Word2Vec | 詞向量方法 |\n",
+            encoding="utf-8",
+        )
+        (self.tmp / "科目A" / "bank.md").write_text(
+            "### 第 1 題\n\n**答案：A**\n\nWord2Vec 屬於下列哪一類?\n\n(A) 詞嵌入;\n(B) 乙;\n(C) 丙;\n(D) 丁\n",
+            encoding="utf-8",
+        )
+        self.conn = state.open_root(self.tmp)
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.tmp)
+
+    def test_two_scopes(self):
+        res = compose.lookup(self.conn, "Word2Vec")
+        self.assertEqual(res["query_used"], "Word2Vec")
+        self.assertTrue(res["courses"])
+        self.assertTrue(res["questions"])
+
+    def test_table_hit_returns_row_and_header(self):
+        res = compose.lookup(self.conn, "詞向量方法")
+        snippet = res["courses"][0]["snippet"]
+        self.assertIn("| Word2Vec | 詞向量方法 |", snippet)
+        self.assertIn("| 名稱 | 說明 |", snippet)
+
+    def test_long_query_is_shortened_from_the_right_and_reported(self):
+        res = compose.lookup(self.conn, "Word2Vec 是一種完全不存在於教材中的長句子描述")
+        self.assertTrue(res["query_used"].startswith("Word2Vec"))
+        self.assertLess(len(res["query_used"]), 20)
+        self.assertTrue(res["courses"] or res["questions"])
+
+    def test_floor_of_four_characters(self):
+        res = compose.lookup(self.conn, "完全不存在的字串內容ABCDEFG")
+        self.assertEqual(len(res["query_used"]), 4)
+        self.assertEqual(res["courses"], [])
+        self.assertEqual(res["questions"], [])
+
+    def test_excludes_the_current_question(self):
+        qkey = self.conn.execute("SELECT qkey FROM cat.question").fetchone()["qkey"]
+        res = compose.lookup(self.conn, "Word2Vec", exclude_qkey=qkey)
+        self.assertEqual(res["questions"], [])

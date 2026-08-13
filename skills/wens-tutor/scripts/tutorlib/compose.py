@@ -4,6 +4,7 @@
 import json
 import random
 import time
+import unicodedata
 
 SECONDS_PER_QUESTION = 108  # 90 minutes / 50 Questions, official rate
 
@@ -212,3 +213,83 @@ def stats(conn) -> dict:
         "stars": conn.execute("SELECT count(*) AS n FROM star").fetchone()["n"],
         "defects": conn.execute("SELECT count(*) AS n FROM cat.defect").fetchone()["n"],
     }
+
+
+LOOKUP_FLOOR = 4
+
+
+def _fold(s: str) -> str:
+    return unicodedata.normalize("NFKC", s).lower()
+
+
+def _table_snippet(text: str, idx: int) -> str:
+    lines = text.splitlines()
+    pos, hit = 0, 0
+    for i, line in enumerate(lines):
+        if pos + len(line) >= idx:
+            hit = i
+            break
+        pos += len(line) + 1
+    line = lines[hit] if hit < len(lines) else ""
+    if not line.startswith("|"):
+        start = max(0, idx - 40)
+        return text[start : idx + 60].replace("\n", " ")
+    header = ""
+    for j in range(hit - 1, -1, -1):
+        if lines[j].startswith("|") and not set(lines[j]) <= set("|- :"):
+            header = lines[j]
+        elif not lines[j].startswith("|"):
+            break
+    return (header + "\n" + line).strip()
+
+
+def _scan(conn, needle: str, exclude_qkey):
+    courses, questions = [], []
+    for r in conn.execute(
+        "SELECT f.relpath, f.subject, f.title AS file_title, s.path, s.title, s.text"
+        " FROM cat.section s JOIN cat.file f ON f.fid = s.fid"
+    ):
+        hay = _fold(r["text"] or "")
+        n = hay.count(needle)
+        if n:
+            courses.append(
+                {
+                    "relpath": r["relpath"],
+                    "subject": r["subject"],
+                    "file_title": r["file_title"],
+                    "path": r["path"],
+                    "title": r["title"],
+                    "hits": n,
+                    "depth": r["path"].count("/"),
+                    "snippet": _table_snippet(r["text"], hay.find(needle)),
+                }
+            )
+    for r in conn.execute(
+        "SELECT q.qkey, q.ordinal, q.stem_md, q.answer, b.title AS bank_title, f.subject"
+        " FROM cat.question q JOIN cat.bank b ON b.bkey=q.bkey JOIN cat.file f ON f.fid=b.fid"
+    ):
+        if exclude_qkey and r["qkey"] == exclude_qkey:
+            continue
+        hay = _fold(r["stem_md"] or "")
+        if needle in hay:
+            questions.append(
+                {
+                    "qkey": r["qkey"],
+                    "ordinal": r["ordinal"],
+                    "bank_title": r["bank_title"],
+                    "subject": r["subject"],
+                    "snippet": r["stem_md"][:120],
+                }
+            )
+    courses.sort(key=lambda c: (-c["hits"], c["depth"], c["path"]))
+    return courses[:20], questions[:20]
+
+
+def lookup(conn, query: str, exclude_qkey: str = None) -> dict:
+    q = " ".join((query or "").split())
+    while len(q) >= LOOKUP_FLOOR:
+        courses, questions = _scan(conn, _fold(q), exclude_qkey)
+        if courses or questions or len(q) == LOOKUP_FLOOR:
+            return {"query_used": q, "courses": courses, "questions": questions}
+        q = q[:-1] if len(q) - 1 >= LOOKUP_FLOOR else q[:LOOKUP_FLOOR]
+    return {"query_used": q, "courses": [], "questions": []}
