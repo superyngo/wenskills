@@ -171,6 +171,12 @@ class TestRules(unittest.TestCase):
         row2 = self.conn.execute("SELECT qkeys_json FROM paper WHERE id=?", (pid2,)).fetchone()
         self.assertEqual(len(json.loads(row2["qkeys_json"])), 6)
 
+    def test_explicit_qkeys_bypasses_defect_exclusion(self):
+        defective_qkey = self.qkeys()[5]
+        pid = compose.compose(self.conn, {"qkeys": [defective_qkey], "timed": False})
+        row = self.conn.execute("SELECT qkeys_json FROM paper WHERE id=?", (pid,)).fetchone()
+        self.assertEqual(json.loads(row["qkeys_json"]), [defective_qkey])
+
     def test_star_lifecycle_needs_two_consecutive_corrects(self):
         target = self.qkeys()[0]
 

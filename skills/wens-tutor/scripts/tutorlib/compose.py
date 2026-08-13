@@ -17,7 +17,7 @@ def _selectable(conn, criteria):
         "WHERE q.answer IS NOT NULL",
     ]
     args = []
-    if not criteria.get("include_defective"):
+    if not criteria.get("include_defective") and not criteria.get("qkeys"):
         sql.append("AND q.qkey NOT IN (SELECT qkey FROM cat.defect)")
     if criteria.get("subjects"):
         sql.append("AND f.subject IN (%s)" % ",".join("?" * len(criteria["subjects"])))

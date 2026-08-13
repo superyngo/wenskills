@@ -94,6 +94,15 @@ async function openAttempt(id) {
 
 function paint() {
   document.getElementById("phase").textContent = `${index + 1}/${attempt.questions.length}`;
+  if (attempt.questions.length === 0) {
+    root.textContent = "";
+    root.append(Object.assign(document.createElement("p"), { textContent: S.exam.empty }));
+    const home = document.createElement("a");
+    home.href = "/";
+    home.textContent = S.exam.backHome;
+    root.append(home);
+    return;
+  }
   const q = attempt.questions[index];
   shownAt = Date.now();
   root.textContent = "";
@@ -231,7 +240,8 @@ async function finish() {
     }));
     if (item.explanation_md) {
       const ex = document.createElement("div");
-      render.renderInto(ex, `**${S.exam.explanation}（${item.explanation_origin}）**\n\n${item.explanation_md}`);
+      const originLabel = S.exam.origin[item.explanation_origin] || item.explanation_origin;
+      render.renderInto(ex, `**${S.exam.explanation}（${originLabel}）**\n\n${item.explanation_md}`);
       box.append(ex);
     }
     const note = document.createElement("textarea");
