@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-13 — docs(wens-tutor): grill the design, pin the domain, record five ADRs
+
+- `skills/wens-tutor/CONTEXT.md`: New — domain glossary pinning 18 terms across content
+  (Materials Root, Subject, Course, Bank, Section, Question, Defect), sitting (Paper,
+  Attempt, Drill, Star), reading (Annotation/Highlight/Note, Orphan, Progress, Lookup) and
+  repair (Backfill, Explanation), each with an `_Avoid_` list. Retires the overloaded
+  "material" and separates Paper (a composed question set) from Attempt (one sitting).
+- `skills/wens-tutor/docs/adr/0001…0005`: New — user-state-only database with the content
+  catalogue parsed into memory at startup (deletes the `index` command, the cache and its
+  invalidation); content-addressed question identity (`qkey = sha256(stem+options)[:12]`)
+  after the materials repo was found to have already done a mass rename in its four-commit
+  history; device-local root registry instead of an absolute path committed inside a synced
+  repo; defective questions detected and excluded from papers by default; explanations as
+  attributed content in the bank file, notes as user state.
+- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Rewritten against eight decisions
+  from the grilling session. New ground-truth measurements: strict bank detection is required
+  (the loose `### 第` pattern misclassifies 58 cheatsheet chapter headings as questions),
+  stems contain fenced code so the option scanner must skip fenced regions, and **23 of 200
+  questions (11.5%) reference a figure/table/code listing that is absent — the corpus holds
+  zero images** — clustered in the Python code-reading questions the issuing body added from
+  114年第二梯次. Adds official exam conditions (90 min / 50 questions / 60-point pass line,
+  scaled per paper size, auto-submit at zero), the star lifecycle (two consecutive corrects
+  clears a `wrong` star; `manual` stars never auto-clear), and the agent backfill workflows
+  that repair defects from the original PDFs already sitting in `source/`.
+
 ### 2026-08-13 — docs(wens-tutor): design spec for courseware review skill + site
 
 - `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: New design for `wens-tutor`, a
