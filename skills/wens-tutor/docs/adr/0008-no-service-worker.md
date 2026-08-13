@@ -13,7 +13,12 @@ one.
 
 ## Consequences
 
-This is recorded precisely because the absence looks like an oversight: a future reader
-comparing the skill against principle 23 would otherwise "fix" it. If the engine ever gains a
-client-side data store that can survive without the server, the trade-off changes and this
-decision should be revisited.
+This is recorded precisely because the absence looks like an oversight: a future reader comparing
+the skill against principle 23 would otherwise "fix" it.
+
+It is also, since ADR 0010, not merely a choice: touch hosts reach the site over plain HTTP on a
+private address, which is not a secure origin, so a service worker cannot register there and
+Chrome's install prompt will not appear regardless. A home-screen bookmark still honours the
+manifest. If the site is ever fronted by real HTTPS (`tailscale serve`) *and* gains a client-side
+store that can survive without the server, the trade-off changes and this decision should be
+revisited.

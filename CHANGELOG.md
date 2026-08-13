@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-08-13 — docs(wens-tutor): touch hosts over a private network, and the implementation plan
+
+- `skills/wens-tutor/docs/adr/0010-touch-hosts-over-a-private-network.md`: New — phones and tablets
+  are first-class hosts: `serve --bind` may leave loopback, and doing so **requires** a shared token
+  (minted at `init`, held in an `HttpOnly` cookie, compared with `hmac.compare_digest`). Touch is
+  treated as a different host, not a width: bottom-fixed selection bar clear of the OS selection
+  handles, tap instead of hover, an in-page slide-over instead of `window.open`, ≥44 px targets,
+  single-column reader with drawers. No TLS in the engine — a secure origin, if wanted, comes from
+  the tunnel (`tailscale serve`).
+- `skills/wens-tutor/docs/adr/0008-no-service-worker.md`: Amended — over plain HTTP on a private
+  address the page is not a secure origin, so a service worker cannot register and Chrome's install
+  prompt will not appear regardless; the original decision is now moot rather than merely
+  deliberate.
+- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Touch hosts moved from out-of-scope to
+  in-scope; new "Hosts and access" section (bind/token/trust boundary/HTTPS delegation); the layout
+  paragraph replaced by a per-host behaviour table; requirement 3.4's "新視窗開啟" now honoured per
+  host; `serve --bind` documented; phone smoke steps added to Verification.
+- `docs/superpowers/plans/2026-08-13-wens-tutor.md`: New — 17-task TDD implementation plan covering
+  the parser (both Bank shapes), the in-memory catalogue, user state with fid/qkey reconciliation,
+  composition/grading/Star lifecycle, Lookup, the JSON API, export/import, the server with path
+  containment and the token gate, the CLI, and the four pages, ending with a desktop smoke run and a
+  real-phone smoke run over the private network.
+
 ### 2026-08-13 — docs(wens-tutor): third grilling round — measured render, install baseline, JSON export
 
 - `skills/wens-tutor/docs/adr/0008-no-service-worker.md`: New — the site installs (manifest,

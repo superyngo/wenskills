@@ -1,7 +1,7 @@
 # wens-tutor skill — design
 
 Domain vocabulary: [`skills/wens-tutor/CONTEXT.md`](../../../skills/wens-tutor/CONTEXT.md).
-Decisions: [`skills/wens-tutor/docs/adr/`](../../../skills/wens-tutor/docs/adr/) (0001–0009).
+Decisions: [`skills/wens-tutor/docs/adr/`](../../../skills/wens-tutor/docs/adr/) (0001–0010).
 Terms defined there — Materials Root, Subject, Material File, Course, Bank, Section, Question,
 Defect, Paper, Attempt, Drill, Star, Annotation, Orphan, Progress, Lookup, Backfill,
 Explanation — are used here with exactly those meanings.
@@ -29,10 +29,14 @@ One skill, `skills/wens-tutor/`, holding both the agent-facing workflow (`SKILL.
 engine (`scripts/`, `web/`). It operates on any registered Materials Root; the iPAS repo is the
 first one, not a hardcoded target.
 
+In scope as hosts: a desktop browser on the machine running `serve`, and phones/tablets reaching
+it over the same private virtual network (ADR 0010).
+
 Out of scope, decided explicitly: 考點代碼 (L21101…) level statistics (the Banks carry no such
-markers, so any mapping would be invented); multi-user, authentication, remote hosting, cloud
-sync; embedding or vector retrieval (also forbidden by the vault's `CLAUDE.md` §6); inferring
-Progress from scroll position; non-multiple-choice Question types; a crawler.
+markers, so any mapping would be invented); multi-user accounts; exposure to the public internet;
+TLS in the engine; cloud sync; embedding or vector retrieval (also forbidden by the vault's
+`CLAUDE.md` §6); inferring Progress from scroll position; non-multiple-choice Question types; a
+crawler.
 
 ## Ground truth (measured 2026-08-13)
 
@@ -107,7 +111,7 @@ task); the engine owns presentation (a deterministic task).**
 skills/wens-tutor/                  the engine, in the wenskills repo
   SKILL.md                          agent workflow + triggers
   CONTEXT.md                        domain glossary
-  docs/adr/0001…0009                decisions
+  docs/adr/0001…0010                decisions
   references/material-format.md     both Question shapes, parser tolerances, Defect rules
   references/db-schema.md           user-state schema + key-stability rationale
   scripts/tutor.py                  CLI: arg parsing and dispatch only
@@ -145,6 +149,19 @@ One process, two static roots:
 
 This replaces symlinking, copying the engine into the material tree, or copying material into
 the skill — the first violates constraint 2, the others duplicate the source of truth.
+
+### Hosts and access (ADR 0010)
+
+`serve --bind` defaults to `127.0.0.1`. Binding any other address requires a token: minted at
+`init`, stored in `~/.config/wens-tutor/roots.json`, accepted as `?t=<token>` on first request and
+then held in a `HttpOnly` cookie, compared with `hmac.compare_digest`. The engine refuses to bind
+a non-loopback address when no token exists. The trust boundary is the private virtual network —
+already device-authenticated at the transport layer — and the token stops another device on that
+network from reading study state by guessing a port. `serve` prints the full tokenised URL so the
+phone is one scan/tap away from being set up once.
+
+No TLS: plain HTTP on a private address. Anyone wanting a secure origin fronts the loopback
+server with their tunnel's HTTPS (`tailscale serve`), which is zero code here.
 
 ### Catalogue (ADR 0001)
 
@@ -392,12 +409,24 @@ metadata, and a web manifest with `standalone` display so the site installs as i
 **No service worker** — the deviation and its reasoning are recorded in ADR 0008, because the
 absence otherwise reads as an oversight.
 
-**Layout** (`ui-design-principles` 19): fluid and resize-aware — no hardcoded widths, the
-reader's TOC/content/annotation columns collapse to fewer columns as width shrinks, and popups
-obey responsive size caps. Target host is a desktop browser on the machine running `serve`;
-touch hosts are out of scope while the server binds 127.0.0.1 only, and would be a shared
-component with per-host adaptation rather than media-query bolt-ons if that ever changes
-(principle 2).
+**Layout and hosts** (`ui-design-principles` 2, 19; ADR 0010): fluid and resize-aware — no
+hardcoded widths, popups under responsive size caps. Two hosts, one component each with per-host
+behaviour, chosen from a single `host = pointer:coarse` detection at boot, never from scattered
+media queries:
+
+| Concern | Desktop | Touch (phone/tablet) |
+|---|---|---|
+| Reader columns | TOC + content + annotations | content only; TOC and annotations are drawers |
+| Selection toolbar | floats at the selection rect | fixed bottom action bar, clear of the OS selection handles |
+| Annotation preview | hover | tap; second tap closes (principle 15) |
+| Lookup result | `window.open` in a new window | in-page slide-over panel |
+| Exam options | rows with `1`–`4`/`A`–`D` shortcuts | full-width buttons, ≥44 px |
+| Question map | always visible | collapsible, countdown in a sticky header |
+| Hit targets | pointer-sized | ≥44 px |
+
+Requirement 3.4 said "點擊在新視窗開啟"; on a phone a new window is hostile (it swaps the whole
+tab and there is no window management), so that requirement is honoured per host — a new window on
+desktop, a slide-over on touch.
 
 ## CLI
 
@@ -408,7 +437,7 @@ component with per-host adaptation rather than media-query bolt-ons if that ever
 | `relink <old-relpath> <new-relpath>` | resolve a reconciliation the startup heuristic refused to guess |
 | `new course <subject> <title>` | write a Course skeleton into the Subject folder |
 | `new bank <subject> <title> [--questions N] [--shape exam\|guide]` | write a Bank skeleton in the chosen parseable shape |
-| `serve [--root] [--port] [--open]` | bind 127.0.0.1 only; three route families |
+| `serve [--root] [--port] [--bind ADDR] [--open]` | `--bind` defaults to `127.0.0.1`; any other address requires the token (ADR 0010); prints the tokenised URL |
 | `stats [--root]` | the same five panels as text, for terminal and agent use |
 | `export [--root]` | write all user state to `.tutor/tutor.json` — diffable, mergeable, committed (ADR 0009) |
 | `import [--root] [--merge]` | rebuild the database from `tutor.json`; `--merge` unions two devices' rows instead of replacing |
@@ -481,6 +510,11 @@ English equivalents (review, mock exam, drill, study progress).
    - select a phrase in a Question, confirm the 課程 tab lists a matching 學習指引 Section, the
      考古題 tab lists other Questions on the same concept, and the new window scrolls to it;
    - tick a leaf Section, confirm the portal's Progress bar moves by exactly 1/57 for 科目1;
+   - on a real phone over the private network: the tokenised URL admits, a bare URL is refused,
+     the bottom selection bar creates a Highlight clear of the OS handles, Lookup opens as a
+     slide-over rather than a new window, and a 10-Question Paper is answerable end to end;
+   - confirm the 292 KB guide renders on that phone in under a second, and record the number
+     (ADR 0010's fallback triggers above it);
    - `export`, delete the database, `import`, confirm every Star, Annotation, Note and Attempt
      returns byte-identical (ADR 0009).
 4. `check` exits 1 on the current corpus (26 Defects) and 0 once they are Backfilled; exits 2
@@ -515,3 +549,6 @@ English equivalents (review, mock exam, drill, study progress).
 | Composition defaults: 50 Questions, all Banks, shuffled, timed, defects off | ask every time; remember the last Paper | the default is the official paper shape, so the common case is one click |
 | Rules tested at the pure-function layer; HTTP smoke-tested only | full HTTP test suite | the five rules fail silently, so they need assertions; the HTTP layer is path containment plus JSON |
 | Remaining time from `started`, never accumulated | tick-based countdown | a backgrounded tab is throttled, so accumulation hands the candidate free time |
+| Touch hosts over a private network, behind a token (ADR 0010) | loopback only; open LAN bind with no token | the human studies on a phone on a private virtual network; the token stops another device on it from reading study state |
+| Per-host components for selection, Lookup and columns | media queries over desktop chrome | the OS selection handles and the absence of hover are behaviour, not width (`ui-design-principles` 2, whose common-mistake row records this being tried and reverted) |
+| No TLS in the engine | self-signed certificates; a bundled cert | the tunnel already offers HTTPS (`tailscale serve`); self-signed certs on a phone are a trust-store fight with no payoff |
