@@ -4,4 +4,5 @@ __pycache__
 
 docs/tmp/
 
-.superpowers/.worktrees/
+.superpowers/
+.worktrees/
