@@ -403,3 +403,28 @@ class TestExportImport(unittest.TestCase):
             "另一台裝置寫的",
         )
         self.assertEqual(self.conn.execute("SELECT count(*) FROM star").fetchone()[0], 1)
+
+from tutorlib import server  # noqa: E402
+
+
+class TestPathContainment(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "科目A").mkdir()
+        (self.tmp / "科目A" / "a.md").write_text("# x\n", encoding="utf-8")
+        (self.tmp / "secret.txt").write_text("no", encoding="utf-8")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def test_allows_a_markdown_file_inside_the_root(self):
+        self.assertIsNotNone(server.safe_material_path(self.tmp, "科目A/a.md"))
+
+    def test_refuses_traversal_absolute_and_non_markdown(self):
+        for bad in ["../../etc/passwd", "/etc/passwd", "secret.txt", "科目A/../../x.md"]:
+            self.assertIsNone(server.safe_material_path(self.tmp, bad), bad)
+
+    def test_refuses_a_symlink_even_inside_the_root(self):
+        link = self.tmp / "科目A" / "link.md"
+        link.symlink_to(self.tmp / "secret.txt")
+        self.assertIsNone(server.safe_material_path(self.tmp, "科目A/link.md"))
