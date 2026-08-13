@@ -358,3 +358,48 @@ class TestApi(unittest.TestCase):
     def test_unknown_route_is_404(self):
         code, _ = api.handle(self.conn, "GET", "/api/nope", {}, None)
         self.assertEqual(code, 404)
+
+class TestExportImport(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "科目A").mkdir()
+        (self.tmp / "科目A" / "bank.md").write_text(
+            "### 第 1 題\n\n**答案：A**\n\n題幹\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n", encoding="utf-8"
+        )
+        self.conn = state.open_root(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def test_round_trip_restores_every_row(self):
+        qkey = self.conn.execute("SELECT qkey FROM cat.question").fetchone()["qkey"]
+        compose.toggle_star(self.conn, qkey)
+        fid = self.conn.execute("SELECT fid FROM cat.file").fetchone()["fid"]
+        self.conn.execute("INSERT INTO progress VALUES (?,?,0)", (fid, "第-1-題"))
+        self.conn.commit()
+        p = state.export_json(self.conn, self.tmp)
+        self.assertTrue(p.exists())
+        self.conn.close()
+
+        state.db_path(self.tmp).unlink()
+        conn2 = state.open_root(self.tmp)
+        self.assertEqual(conn2.execute("SELECT count(*) FROM star").fetchone()[0], 0)
+        state.import_json(conn2, self.tmp)
+        self.assertEqual(conn2.execute("SELECT qkey FROM star").fetchone()[0], qkey)
+        self.assertEqual(conn2.execute("SELECT count(*) FROM progress").fetchone()[0], 1)
+        conn2.close()
+
+    def test_merge_unions_rows_from_two_devices(self):
+        qkey = self.conn.execute("SELECT qkey FROM cat.question").fetchone()["qkey"]
+        compose.toggle_star(self.conn, qkey)
+        self.conn.commit()
+        state.export_json(self.conn, self.tmp)
+        payload = json.loads(state.json_path(self.tmp).read_text(encoding="utf-8"))
+        payload["note"].append({"qkey": qkey, "note_md": "另一台裝置寫的", "ts": 1.0})
+        state.json_path(self.tmp).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        state.import_json(self.conn, self.tmp, merge=True)
+        self.assertEqual(
+            self.conn.execute("SELECT note_md FROM note WHERE qkey=?", (qkey,)).fetchone()[0],
+            "另一台裝置寫的",
+        )
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM star").fetchone()[0], 1)

@@ -140,3 +140,48 @@ def reconcile(conn: sqlite3.Connection, root: Path) -> dict:
     conn.commit()
     record_slots(conn)
     return report
+
+
+TABLES = (
+    "file_id",
+    "annotation",
+    "progress",
+    "reading_pos",
+    "star",
+    "note",
+    "paper",
+    "attempt",
+    "attempt_item",
+)
+
+
+def json_path(root: Path) -> Path:
+    return Path(root) / ".tutor" / "tutor.json"
+
+
+def export_json(conn: sqlite3.Connection, root: Path) -> Path:
+    payload = {"version": 1}
+    for t in TABLES:
+        payload[t] = [dict(r) for r in conn.execute(f"SELECT * FROM {t}")]
+    p = json_path(root)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+    return p
+
+
+def import_json(conn: sqlite3.Connection, root: Path, merge: bool = False) -> dict:
+    payload = json.loads(json_path(root).read_text(encoding="utf-8"))
+    counts = {}
+    for t in TABLES:
+        rows = payload.get(t) or []
+        if not merge:
+            conn.execute(f"DELETE FROM {t}")
+        for row in rows:
+            cols = ",".join(row.keys())
+            marks = ",".join("?" * len(row))
+            conn.execute(
+                f"INSERT OR REPLACE INTO {t}({cols}) VALUES ({marks})", list(row.values())
+            )
+        counts[t] = len(rows)
+    conn.commit()
+    return counts
