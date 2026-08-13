@@ -216,3 +216,102 @@ def parse_exam_bank(md: str, path: str = "", title: str = "") -> Bank:
             unattributed=extra,
         ))
     return Bank(path=path, title=title, shape="exam", questions=questions)
+
+
+GUIDE_Q = re.compile(r"^(\d+)\.\s+(.*)$")
+GUIDE_OPT = re.compile(r"^\s*-\s*[（(]([A-E])[)）]\s*(.+?)\s*$")
+GUIDE_ANS = re.compile(r"^\*\*(\d+)\.\s*Ans[（(]([A-E])[)）]\s*(.*?)\*\*\s*$")
+GUIDE_EXPL = re.compile(r"^解析[：:]\s*(.*)$")
+FIGURE_REF = re.compile(
+    r"下圖|上圖|圖中|附圖|如圖|下表|上表|表中|以下程式|下列程式|程式碼中|程式中|如下所示"
+)
+TABLE_ROW = re.compile(r"^\|", re.M)
+
+
+def _guide_questions(body: str):
+    """[(ordinal, stem, options)] from a 選擇題 region body."""
+    out = []
+    cur_ord, cur_stem, cur_opts = None, [], []
+    for line in body.splitlines():
+        m = GUIDE_OPT.match(line)
+        if m and cur_ord is not None:
+            cur_opts.append((m.group(1), m.group(2).strip()))
+            continue
+        m = GUIDE_Q.match(line)
+        if m:
+            if cur_ord is not None:
+                out.append((cur_ord, "\n".join(cur_stem).strip(), cur_opts))
+            cur_ord, cur_stem, cur_opts = int(m.group(1)), [m.group(2)], []
+            continue
+        if cur_ord is not None:
+            cur_stem.append(line)
+    if cur_ord is not None:
+        out.append((cur_ord, "\n".join(cur_stem).strip(), cur_opts))
+    return out
+
+
+def _guide_answers(body: str):
+    """{ordinal: (letter, explanation)} from a 解答與解析 region body."""
+    out, cur = {}, None
+    for line in body.splitlines():
+        m = GUIDE_ANS.match(line)
+        if m:
+            cur = int(m.group(1))
+            out[cur] = [m.group(2), ""]
+            continue
+        m = GUIDE_EXPL.match(line)
+        if m and cur is not None:
+            out[cur][1] = m.group(1).strip()
+    return {k: tuple(v) for k, v in out.items()}
+
+
+def parse_guide_banks(md: str) -> List[Bank]:
+    sections = parse_sections(md)
+    banks = []
+    for n, sec in enumerate(sections):
+        if sec.title.strip() != "選擇題":
+            continue
+        nxt = sections[n + 1] if n + 1 < len(sections) else None
+        answers = _guide_answers(nxt.text) if nxt and nxt.title.strip() == "解答與解析" else {}
+        questions = []
+        for ordinal, stem, options in _guide_questions(sec.text):
+            letter, expl = answers.get(ordinal, (None, ""))
+            questions.append(
+                Question(
+                    qkey=qkey_for(stem, options),
+                    ordinal=ordinal,
+                    type="single",
+                    stem_md=stem,
+                    options=options,
+                    answer=letter,
+                    explanation_md=expl,
+                    explanation_origin="official" if expl else None,
+                    shared_span=None,          # guides never use 題組
+                    declared_defect=bool(DECLARED.search(stem)),
+                    unattributed=[],           # a guide region has no post-option prose
+                )
+            )
+        banks.append(Bank(path=sec.path, title=sec.title, shape="guide", questions=questions))
+    return banks
+
+
+def defects_for(q: Question) -> List[str]:
+    out = []
+    if not q.answer:
+        out.append("no_answer")
+    blob = q.stem_md + "\n" + "\n".join(t for _, t in q.options)
+    has_artifact = "```" in blob or TABLE_ROW.search(blob) or "![" in blob
+    # Declared beats inferred: the content saying so is authoritative (ADR 0012).
+    if q.declared_defect or (FIGURE_REF.search(blob) and not has_artifact):
+        out.append("figure_missing")
+    if q.unattributed:
+        out.append("unattributed_lines")
+    return out
+
+
+def parse_file(md: str):
+    sections = parse_sections(md)
+    exam = parse_exam_bank(md)
+    if exam:
+        return sections, [exam]
+    return sections, parse_guide_banks(md)

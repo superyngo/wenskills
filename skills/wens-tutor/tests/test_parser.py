@@ -285,5 +285,104 @@ class TestRealExamBanks(unittest.TestCase):
             for a, b in zip(spans, spans[1:]):
                 self.assertGreater(b[0], a[1], f"{p.name} {a} vs {b}")
 
+GUIDE = """# 第三章
+
+## 3.1 NLP
+
+### 選擇題
+
+1. 下列何者為詞嵌入技術？
+   - （A）TF-IDF
+   - （B）Word2Vec
+   - （C）Stop Words
+   - （D）Bag-of-Words
+
+2. 下圖中的模型為何？
+   - （A）甲
+   - （B）乙
+   - （C）丙
+   - （D）丁
+
+### 解答與解析
+
+**1. Ans（B） Word2Vec**
+
+解析：Word2Vec 可將文字轉為向量。
+
+**2. Ans（A） 甲**
+
+解析：如圖所示。
+"""
+
+
+class TestGuideBanks(unittest.TestCase):
+    def setUp(self):
+        self.banks = parser.parse_guide_banks(GUIDE)
+
+    def test_one_bank_paired_with_the_next_sibling_region(self):
+        self.assertEqual(len(self.banks), 1)
+        self.assertEqual(self.banks[0].shape, "guide")
+        self.assertEqual(self.banks[0].path, "第三章/3-1-nlp/選擇題")
+
+    def test_answers_and_official_explanations(self):
+        qs = self.banks[0].questions
+        self.assertEqual([q.answer for q in qs], ["B", "A"])
+        self.assertEqual(qs[0].explanation_origin, "official")
+        self.assertIn("轉為向量", qs[0].explanation_md)
+
+    def test_options_use_fullwidth_parens(self):
+        self.assertEqual(self.banks[0].questions[0].options[1], ("B", "Word2Vec"))
+
+    def test_figure_missing_defect(self):
+        qs = self.banks[0].questions
+        self.assertEqual(parser.defects_for(qs[0]), [])
+        self.assertEqual(parser.defects_for(qs[1]), ["figure_missing"])
+
+
+class TestCorpusTotals(unittest.TestCase):
+    def test_270_questions_11_banks_and_defect_counts(self):
+        banks, questions = [], []
+        for p in material_files():
+            _, bs = parser.parse_file(p.read_text(encoding="utf-8"))
+            banks += bs
+            for b in bs:
+                questions += b.questions
+        self.assertEqual(len(banks), 11)
+        self.assertEqual(len(questions), 270)
+        self.assertEqual(len({q.qkey for q in questions}), 270)
+        self.assertEqual(sum(1 for b in banks if b.shape == "exam"), 4)
+        self.assertEqual(sum(len(b.questions) for b in banks if b.shape == "guide"), 70)
+        self.assertEqual(sum(1 for q in questions if q.type == "multi"), 0)
+        kinds = [k for q in questions for k in parser.defects_for(q)]
+        self.assertEqual(kinds.count("no_answer"), 3)
+        self.assertEqual(kinds.count("figure_missing"), 25)
+        self.assertEqual(kinds.count("unattributed_lines"), 0)
+        self.assertEqual(len(kinds), 28)
+        official = [q for q in questions if q.explanation_origin == "official"]
+        self.assertEqual(len(official), 70)
+
+    def test_declared_and_inferred_provenance(self):
+        declared = inferred = union = 0
+        for p in material_files():
+            _, bs = parser.parse_file(p.read_text(encoding="utf-8"))
+            for b in bs:
+                for q in b.questions:
+                    blob = q.stem_md + "\n" + "\n".join(t for _, t in q.options)
+                    artifact = "```" in blob or parser.TABLE_ROW.search(blob) or "![" in blob
+                    inf = bool(parser.FIGURE_REF.search(blob)) and not artifact
+                    declared += 1 if q.declared_defect else 0
+                    inferred += 1 if inf else 0
+                    union += 1 if (q.declared_defect or inf) else 0
+        self.assertEqual((declared, inferred, union), (18, 24, 25))
+
+    def test_guide_defects_are_zero(self):
+        for p in material_files():
+            _, bs = parser.parse_file(p.read_text(encoding="utf-8"))
+            for b in bs:
+                if b.shape == "guide":
+                    for q in b.questions:
+                        self.assertEqual(parser.defects_for(q), [], f"{p.name} {q.ordinal}")
+
+
 if __name__ == "__main__":
     unittest.main()
