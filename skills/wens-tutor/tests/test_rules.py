@@ -1,8 +1,10 @@
 # skills/wens-tutor/tests/test_rules.py
 import json
 import os
+import shutil
 import sqlite3
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,7 +12,7 @@ from pathlib import Path
 os.environ.setdefault("WENS_TUTOR_CONFIG", "/tmp/wens-tutor-tests.json")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from tutorlib import catalog  # noqa: E402
+from tutorlib import catalog, state  # noqa: E402
 
 ROOT = Path("~/repos/wenswiki/wenswiki/work/平台/2026_AI應用規劃師").expanduser()
 
@@ -39,3 +41,100 @@ class TestCatalogue(unittest.TestCase):
         conn = catalog.open_catalog(ROOT)
         subjects = {r[0] for r in conn.execute("SELECT DISTINCT subject FROM cat.file")}
         self.assertEqual(subjects, {"AI應用規劃師", "機器學習"})
+
+
+def bank_md(stems):
+    """A Bank of len(stems) Questions. Three is the minimum that makes a relink test real:
+    with one Question, any 'find the single free slot' guess resolves by luck."""
+    return "".join(
+        "### 第 %d 題\n\n**答案：A**\n\n%s\n\n(A) 甲;\n(B) 乙;\n(C) 丙;\n(D) 丁\n\n" % (i, stem)
+        for i, stem in enumerate(stems, start=1)
+    )
+
+
+class TestFidReconciliation(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "科目A").mkdir()
+        self.f = self.tmp / "科目A" / "bank.md"
+        self.f.write_text(bank_md(["題幹一", "題幹二", "題幹三"]), encoding="utf-8")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def qkeys(self):
+        conn = state.open_root(self.tmp)
+        try:
+            return [r[0] for r in conn.execute("SELECT qkey FROM cat.question ORDER BY ordinal")]
+        finally:
+            conn.close()
+
+    def test_star_survives_a_file_rename(self):
+        conn = state.open_root(self.tmp)
+        qkey = conn.execute("SELECT qkey FROM cat.question ORDER BY ordinal").fetchone()[0]
+        conn.execute("INSERT INTO star VALUES (?,'manual',0)", (qkey,))
+        conn.commit()
+        conn.close()
+
+        self.f.rename(self.f.with_name("renamed.md"))
+        conn = state.open_root(self.tmp)
+        self.assertEqual(conn.execute("SELECT count(*) FROM star").fetchone()[0], 1)
+        joined = conn.execute(
+            "SELECT count(*) FROM star s JOIN cat.question q ON q.qkey = s.qkey"
+        ).fetchone()[0]
+        self.assertEqual(joined, 1)
+        conn.close()
+
+    def test_progress_follows_the_file_via_fid(self):
+        conn = state.open_root(self.tmp)
+        fid = conn.execute("SELECT fid FROM cat.file").fetchone()[0]
+        conn.execute("INSERT INTO progress VALUES (?,?,0)", (fid, "第-1-題"))
+        conn.commit()
+        conn.close()
+        self.f.rename(self.f.with_name("renamed2.md"))
+        conn = state.open_root(self.tmp)
+        self.assertEqual(conn.execute("SELECT fid FROM cat.file").fetchone()[0], fid)
+        conn.close()
+
+    def test_slots_are_recorded_for_every_question(self):
+        conn = state.open_root(self.tmp)
+        rows = conn.execute("SELECT qkey, ordinal FROM question_slot ORDER BY ordinal").fetchall()
+        self.assertEqual([r["ordinal"] for r in rows], [1, 2, 3])
+        conn.close()
+
+    def test_stem_edit_relinks_by_slot_not_by_guessing(self):
+        before = self.qkeys()
+        conn = state.open_root(self.tmp)
+        conn.execute("INSERT INTO star VALUES (?,'wrong',0)", (before[1],))
+        conn.execute("INSERT INTO note VALUES (?,'我的筆記',0)", (before[1],))
+        conn.commit()
+        conn.close()
+
+        self.f.write_text(bank_md(["題幹一", "題幹貳", "題幹三"]), encoding="utf-8")
+        conn = state.open_root(self.tmp)
+        report = state.reconcile(conn, self.tmp)
+        after = [r[0] for r in conn.execute("SELECT qkey FROM cat.question ORDER BY ordinal")]
+        self.assertEqual(after[0], before[0])          # untouched Questions keep their identity
+        self.assertEqual(after[2], before[2])
+        self.assertNotEqual(after[1], before[1])
+        self.assertEqual(len(report["relinked_questions"]), 1)
+        self.assertEqual(report["relinked_questions"][0]["to"], after[1])
+        self.assertEqual(conn.execute("SELECT qkey FROM star").fetchone()[0], after[1])
+        self.assertEqual(conn.execute("SELECT qkey FROM note").fetchone()[0], after[1])
+        self.assertEqual(report["unresolved"], [])
+        conn.close()
+
+    def test_a_deleted_question_is_reported_unresolved_not_mislinked(self):
+        before = self.qkeys()
+        conn = state.open_root(self.tmp)
+        conn.execute("INSERT INTO star VALUES (?,'wrong',0)", (before[2],))
+        conn.commit()
+        conn.close()
+
+        self.f.write_text(bank_md(["題幹一", "題幹二"]), encoding="utf-8")
+        conn = state.open_root(self.tmp)
+        report = state.reconcile(conn, self.tmp)
+        self.assertEqual(report["relinked_questions"], [])
+        self.assertEqual(report["unresolved"], [before[2]])
+        self.assertEqual(conn.execute("SELECT qkey FROM star").fetchone()[0], before[2])
+        conn.close()
