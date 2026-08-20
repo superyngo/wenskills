@@ -98,10 +98,9 @@ _Avoid_: flag, bookmark, favourite, important
 ### Reading
 
 **Annotation**:
-A user mark anchored to a passage of any Material File — Course prose or a Question stem
-alike — re-located on each render by quoting the passage rather than by storing a position. A
-**Highlight** is an Annotation with a colour and no text; a **Note** is an Annotation carrying
-the human's own words. One concept, two shapes.
+A user Highlight anchored to a passage of any Material File — Course prose or a Question stem
+alike — re-located on each render by quoting the passage rather than by storing a position.
+Carries a colour; no text note.
 _Avoid_: comment, mark, memo
 
 **Orphan**:

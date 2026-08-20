@@ -47,14 +47,9 @@ hub(op="start", name="wens-tutor", application="uv",
     cwd="skills/wens-tutor", ready={"port": 8765, "timeout": 15})
 ```
 
-Report the tokenised URL the CLI prints (`http://127.0.0.1:<port>/?t=<token>`) to the user —
-that query parameter is what authorises the browser; a bare URL without it only works over
-loopback with no token configured.
-
-`--bind` defaults to `127.0.0.1` (loopback, no token required). Binding anything else — e.g.
-`--bind 0.0.0.0` so a phone on the same private network can reach it — **requires** the token
-minted at `init`: the engine refuses to bind a non-loopback address without one (ADR 0010). A
-request without a valid `?t=` (first hit) or `tutor_token` cookie (subsequent hits) gets `403`.
+Report the URL the CLI prints (`http://<host>:<port>/`). `--bind` defaults to `0.0.0.0`, so any
+device on the same private network can reach the site directly — no token, no cookie, no auth
+gate (ADR 0014 supersedes ADR 0010). Use `--bind 127.0.0.1` to restrict to loopback only.
 
 ## Repair workflows
 

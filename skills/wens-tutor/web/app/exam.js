@@ -12,9 +12,9 @@ let attempt = null, index = 0, shownAt = Date.now(), ticker = null, deadline = n
 async function main() {
   document.getElementById("keys").textContent =
     [S.keys.digits, S.keys.arrows, S.keys.enter, S.keys.esc].join("　");
-  if (params.get("attempt")) return openAttempt(Number(params.get("attempt")));
+  if (params.get("review")) return openReview(Number(params.get("review")));
   if (params.get("q")) return startPaper({ qkeys: [params.get("q")], timed: false });
-  if (params.get("drill")) return startPaper({ drill: true });
+  if (params.get("attempt")) return openAttempt(Number(params.get("attempt")));
   renderComposeForm();
 }
 
@@ -225,8 +225,19 @@ async function finish() {
   deadline = null;
   clock.textContent = "";
   const result = await api.post(`/api/attempt/${attempt.attempt_id}/submit`, {});
-  root.textContent = "";
   document.getElementById("phase").textContent = S.exam.score;
+  renderReview(result);
+}
+
+async function openReview(id) {
+  document.getElementById("keys").textContent = S.keys.esc;
+  document.getElementById("phase").textContent = S.portal.review;
+  const result = await api.get(`/api/review/${id}`);
+  renderReview(result);
+}
+
+function renderReview(result) {
+  root.textContent = "";
   root.append(Object.assign(document.createElement("h2"), {
     textContent: `${result.score} ${result.passed ? "✓ " + S.exam.pass : ""} ${result.expired ? S.exam.expired : ""}`,
   }));
@@ -235,9 +246,16 @@ async function finish() {
     const stem = document.createElement("div");
     render.renderInto(stem, item.stem_md);
     box.append(stem);
-    box.append(Object.assign(document.createElement("p"), {
-      textContent: `✗ ${item.given || S.exam.blank} → ✓ ${item.answer}`,
-    }));
+    // Show full option list, mark user's wrong answer ✗ and correct answer ✓
+    for (const [letter, text] of item.options) {
+      const p = document.createElement("p");
+      const prefix = letter === item.answer ? "✓ " :
+                     letter === item.given ? "✗ " : "　　";
+      p.textContent = `${prefix}(${letter}) ${text}`;
+      if (letter === item.answer) p.style.color = "#080";
+      if (letter === item.given && letter !== item.answer) p.style.color = "#c00";
+      box.append(p);
+    }
     if (item.explanation_md) {
       const ex = document.createElement("div");
       const originLabel = S.exam.origin[item.explanation_origin] || item.explanation_origin;
@@ -256,6 +274,10 @@ async function finish() {
     box.append(star);
     root.append(box);
   }
+  const home = document.createElement("a");
+  home.href = "/";
+  home.textContent = S.exam.backHome;
+  root.append(home);
 }
 
 document.addEventListener("keydown", (e) => {

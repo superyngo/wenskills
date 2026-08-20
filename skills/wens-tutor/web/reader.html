@@ -3,18 +3,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
 <link rel="stylesheet" href="/style.css">
 <title>wens-tutor · reader</title>
 <header class="app"><a href="/">←</a><strong id="title"></strong>
-  <button id="toc-toggle" type="button"></button>
-  <button id="ann-toggle" type="button"></button></header>
+  <span class="toolbar">
+    <button id="toc-toggle" type="button"></button>
+    <button id="ann-toggle" type="button"></button>
+    <button id="hl-apply" type="button" disabled></button>
+    <button id="hl-color" type="button"></button>
+    <button id="hl-clear" type="button" disabled></button>
+  </span></header>
 <main class="layout">
   <nav id="toc" class="drawer"></nav>
   <article id="doc"></article>
   <aside id="anns" class="drawer"></aside>
 </main>
-<div id="selbar" class="selection-bar--float" hidden></div>
 <footer class="keys" id="keys"></footer>
+<script src="/vendor/katex/katex.min.js"></script>
 <script src="/vendor/markdown-it.min.js"></script>
 <script type="module" src="/app/reader.js"></script>
 </html>

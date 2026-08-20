@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS file_id(fid TEXT PRIMARY KEY, relpath TEXT, first_see
 CREATE TABLE IF NOT EXISTS question_slot(qkey TEXT PRIMARY KEY, bkey TEXT, ordinal INT, ts REAL);
 CREATE TABLE IF NOT EXISTS annotation(id INTEGER PRIMARY KEY AUTOINCREMENT, fid TEXT,
                                       block_line INT, exact TEXT, prefix TEXT, suffix TEXT,
-                                      color TEXT, note_md TEXT, ts REAL, orphan INT DEFAULT 0);
+                                      color TEXT, note_md TEXT, ts REAL, orphan INT DEFAULT 0,
+                                      start_offset INT DEFAULT 0, length INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS progress(fid TEXT, path TEXT, read_at REAL, PRIMARY KEY(fid, path));
 CREATE TABLE IF NOT EXISTS reading_pos(fid TEXT PRIMARY KEY, line INT, ts REAL);
 CREATE TABLE IF NOT EXISTS star(qkey TEXT PRIMARY KEY, origin TEXT, ts REAL);
@@ -56,6 +57,12 @@ def open_root(root: Path) -> sqlite3.Connection:
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(p), check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # Idempotent migration: add offset columns to pre-existing annotation tables
+    for col, decl in [("start_offset", "INT DEFAULT 0"), ("length", "INT DEFAULT 0")]:
+        try:
+            conn.execute(f"ALTER TABLE annotation ADD COLUMN {col} {decl}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
     conn.executescript(DDL)
     conn.execute("ATTACH ':memory:' AS cat")
 

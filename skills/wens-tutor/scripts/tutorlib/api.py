@@ -12,6 +12,7 @@ from . import compose, registry
 ANN_ID = re.compile(r"^/api/annotation/(\d+)$")
 ATT_ANSWER = re.compile(r"^/api/attempt/(\d+)/answer$")
 ATT_SUBMIT = re.compile(r"^/api/attempt/(\d+)/submit$")
+ATT_REVIEW = re.compile(r"^/api/review/(\d+)$")
 ATT_GET = re.compile(r"^/api/attempt/(\d+)$")
 SKILL_DIR = Path(__file__).resolve().parents[2]
 _VERSION = None
@@ -117,7 +118,7 @@ def handle(conn, method, path, query, body):
             banks = [
                 dict(b)
                 for b in conn.execute(
-                    "SELECT b.bkey, b.title, b.shape,"
+                    "SELECT b.bkey, b.title, b.shape, b.path,"
                     " (SELECT count(*) FROM cat.question q WHERE q.bkey=b.bkey) AS n_questions,"
                     " (SELECT count(*) FROM cat.question q JOIN cat.defect d ON d.qkey=q.qkey WHERE q.bkey=b.bkey) AS defects,"
                     " (SELECT count(*) FROM cat.question q JOIN star s ON s.qkey=q.qkey WHERE q.bkey=b.bkey) AS stars"
@@ -147,7 +148,7 @@ def handle(conn, method, path, query, body):
             dict(r)
             for r in conn.execute(
                 "SELECT id, finished, total, correct, round(correct*100.0/total,1) AS score"
-                " FROM attempt WHERE finished IS NOT NULL ORDER BY finished DESC LIMIT 5"
+                " FROM attempt WHERE finished IS NOT NULL ORDER BY finished DESC LIMIT 20"
             )
         ]
         return 200, {"subjects": list(subjects.values()), "in_flight": in_flight, "latest": latest}
@@ -176,10 +177,12 @@ def handle(conn, method, path, query, body):
     if path == "/api/annotation" and method == "POST":
         fid = _fid(conn, body["relpath"])
         cur = conn.execute(
-            "INSERT INTO annotation(fid, block_line, exact, prefix, suffix, color, note_md, ts, orphan)"
-            " VALUES (?,?,?,?,?,?,?,?,0)",
+            "INSERT INTO annotation(fid, block_line, exact, prefix, suffix, color, note_md, ts, orphan,"
+            " start_offset, length)"
+            " VALUES (?,?,?,?,?,?,?,?,0,?,?)",
             (fid, body["block_line"], body["exact"], body.get("prefix", ""), body.get("suffix", ""),
-             body.get("color", "yellow"), body.get("note_md", ""), time.time()),
+             body.get("color", "yellow"), body.get("note_md", ""), time.time(),
+             body.get("start_offset", 0), body.get("length", 0)),
         )
         conn.commit()
         return 200, {"id": cur.lastrowid}
@@ -187,7 +190,7 @@ def handle(conn, method, path, query, body):
     m = ANN_ID.match(path)
     if m and method == "PATCH":
         sets, args = [], []
-        for k in ("orphan", "color", "note_md"):
+        for k in ("orphan", "color", "note_md", "start_offset", "length"):
             if k in body:
                 sets.append(f"{k}=?")
                 args.append(body[k])
@@ -237,6 +240,13 @@ def handle(conn, method, path, query, body):
             "questions": _questions_of_attempt(conn, aid),
         }
 
+    if m and method == "DELETE":
+        aid = int(m.group(1))
+        conn.execute("DELETE FROM attempt_item WHERE attempt_id=?", (aid,))
+        conn.execute("DELETE FROM attempt WHERE id=?", (aid,))
+        conn.commit()
+        return 200, {"ok": True}
+
     m = ATT_ANSWER.match(path)
     if m and method == "PUT":
         compose.answer(conn, int(m.group(1)), body["qkey"], body["given"], body.get("ms", 0))
@@ -248,6 +258,33 @@ def handle(conn, method, path, query, body):
         result = compose.submit(conn, attempt_id)
         result["wrong"] = _wrong_detail(conn, attempt_id, result["wrong"])
         return 200, result
+
+    m = ATT_REVIEW.match(path)
+    if m and method == "GET":
+        attempt_id = int(m.group(1))
+        att = conn.execute(
+            "SELECT total, correct, round(correct*100.0/total,1) AS score,"
+            " (correct*100.0/total >= 60) AS passed"
+            " FROM attempt WHERE id=? AND finished IS NOT NULL",
+            (attempt_id,),
+        ).fetchone()
+        if not att:
+            return 404, {"error": "unknown or unfinished attempt"}
+        wrong_qkeys = [
+            r["qkey"]
+            for r in conn.execute(
+                "SELECT qkey FROM attempt_item WHERE attempt_id=? AND correct=0",
+                (attempt_id,),
+            )
+        ]
+        return 200, {
+            "attempt_id": attempt_id,
+            "total": att["total"],
+            "correct": att["correct"],
+            "score": att["score"],
+            "passed": bool(att["passed"]),
+            "wrong": _wrong_detail(conn, attempt_id, wrong_qkeys),
+        }
 
     if path == "/api/star" and method == "POST":
         return 200, {"starred": compose.toggle_star(conn, body["qkey"])}

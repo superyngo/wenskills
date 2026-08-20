@@ -205,12 +205,10 @@ def cmd_new(args):
 
 def cmd_serve(args):
     root = resolve_root(args)
-    data = registry.load()
     server.serve(
         root,
-        port=args.port or data.get("port", 8765),
+        port=args.port or registry.load().get("port", 8765),
         bind=args.bind,
-        token=data.get("token"),
         open_browser=args.open,
     )
     return 0
@@ -262,7 +260,7 @@ def main(argv=None):
     p.add_argument("--shape", choices=["exam", "guide"], default="exam")
     p.add_argument("--root"); p.set_defaults(fn=cmd_new)
     p = sub.add_parser("serve"); p.add_argument("--root"); p.add_argument("--port", type=int)
-    p.add_argument("--bind", default="127.0.0.1"); p.add_argument("--open", action="store_true")
+    p.add_argument("--bind", default="0.0.0.0"); p.add_argument("--open", action="store_true")
     p.set_defaults(fn=cmd_serve)
     p = sub.add_parser("stats"); p.add_argument("--root"); p.set_defaults(fn=cmd_stats)
     p = sub.add_parser("export"); p.add_argument("--root"); p.set_defaults(fn=cmd_export)

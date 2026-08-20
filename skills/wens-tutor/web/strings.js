@@ -1,12 +1,13 @@
 // skills/wens-tutor/web/strings.js — every user-facing string (ui-design-principles 22)
 export const S = {
   app: "wens-tutor",
-  portal: { title: "複習入口", courses: "課程", banks: "題庫", progress: "進度",
+  portal: { title: "複習入口", courses: "課程", banks: "題庫",
             annotations: "標註", orphans: "失效標註", stars: "重點題", defects: "殘缺題",
-            newPaper: "開始模擬考", drill: "重點模式", stats: "統計", inFlight: "進行中" },
-  reader: { toc: "章節", read: "已讀", highlight: "畫線", note: "註記", del: "刪除",
-            orphanList: "失效標註（原文找不到了）", lookup: "查課程", resume: "回到上次位置",
-            annotations: "標註" },
+            newPaper: "開始模擬考", drill: "重點模式", stats: "統計", inFlight: "進行中",
+            browse: "閱覽", history: "歷史紀錄", review: "檢討" },
+  reader: { toc: "章節", highlight: "畫線", color: "顏色", clear: "清除",
+            del: "刪除", orphanList: "失效標註（原文找不到了）", lookup: "查課程",
+            annotations: "標註", empty: "尚無標註", revealAnswer: "點擊顯示答案", jumpHint: "跳到畫線位置" },
   exam: { compose: "出卷", subjects: "科目", banks: "題庫", cap: "題數", shuffle: "洗題",
           timed: "計時", includeDefective: "含殘缺題", start: "開始",
           submit: "交卷", remaining: "剩餘", expired: "已逾時", score: "分數",

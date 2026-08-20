@@ -1,4 +1,4 @@
-# Touch hosts are supported over a private virtual network, behind a token
+# Touch hosts are supported over a private virtual network (superseded by ADR 0014)
 
 Phones and tablets are first-class hosts: `serve --bind <addr>` may bind beyond loopback so a
 device on the same private virtual network (Tailscale, ZeroTier, or an equivalent) can reach the

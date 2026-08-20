@@ -1,4 +1,4 @@
-// skills/wens-tutor/web/app/host.js — one host decision, not scattered media queries (ADR 0010)
+// skills/wens-tutor/web/app/host.js — host detection for touch vs pointer
 export const isTouch = window.matchMedia("(pointer: coarse)").matches;
 
 export function openLookupResult(url) {
@@ -9,10 +9,4 @@ export function openLookupResult(url) {
   panel.addEventListener("click", (e) => { if (e.target === panel) panel.remove(); });
   document.body.appendChild(panel);
   return panel;
-}
-
-export function mountSelectionBar(el) {
-  el.classList.toggle("selection-bar--bottom", isTouch);
-  el.classList.toggle("selection-bar--float", !isTouch);
-  return el;
 }

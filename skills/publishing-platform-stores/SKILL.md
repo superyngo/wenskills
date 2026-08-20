@@ -56,6 +56,18 @@ Why this shape, not one big workflow:
   already built and uploaded as a workflow artifact (`actions/download-artifact@v5` with
   `run-id: <the release run>`), so what ships to a store is byte-identical to what's on the
   GitHub Release — never rebuilt from source a second time.
+- **Decouple checkout `ref` from the release `tag` for source-building publishers.** Stores
+  that build from source at publish time (VS Marketplace/Open VSX, Obsidian, browser
+  extensions) rather than re-uploading a prebuilt artifact should take `ref` as an input
+  separate from `tag`, defaulting to `tag` when omitted: `ref: ${{ inputs.ref || inputs.tag }}`.
+  `tag` is only what the publish is *recorded against* and what the manifest/`package.json`
+  version is validated against; `ref` is what actually gets checked out and built. Hardcoding
+  the checkout to `inputs.tag` means any post-tag fix (a version-file typo caught only by the
+  publish workflow's own validation step) can only be fixed by moving/retagging the whole app
+  release — which re-triggers the entire cross-platform build matrix in `release.yml` for a
+  one-file change unrelated to any of those builds. With `ref` decoupled, dispatch with the
+  original `tag` (so the release record stays correct) and `ref` pointed at whatever branch/SHA
+  has the fix.
 - **Gate excludes dry runs.** Guard the gate job with
   `github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'`
   so manual `workflow_dispatch` test builds on `main` never trigger real store submissions.
@@ -102,8 +114,14 @@ the reference set.
 3. Add the required GitHub secrets, named `<STORE>_<FIELD>` (uppercase, e.g.
    `MSIX_SUBMISSION_CLIENT_SECRET`).
 4. Add one dispatch line to `publish-gate.yml`:
-   `gh workflow run publish-<store>.yml --repo "${{ github.repository }}" --ref main -f tag="$TAG" -f run_id="$RUN_ID"`
-5. Write `publish-<store>.yml`: `workflow_dispatch` inputs `tag` + `run_id` →
+   `gh workflow run publish-<store>.yml --repo "${{ github.repository }}" --ref main -f tag="$TAG" -f run_id="$RUN_ID"`.
+   Give `publish-gate.yml` itself a `workflow_dispatch` trigger too (`tag`, `run_id` inputs,
+   same `if: github.event_name == 'workflow_dispatch' || (...)` pattern), so the whole
+   approval gate can be re-run manually for an already-built release — e.g. re-approving after
+   a downstream publish failure — without waiting for a fresh `Release` `workflow_run` event.
+5. Write `publish-<store>.yml`: `workflow_dispatch` inputs `tag` + `run_id` (artifact-only
+   stores that just re-upload what `release.yml` built) or `tag` + optional `ref` defaulting to
+   `tag` (source-building stores — see Decouple checkout `ref` above) →
    `actions/download-artifact@v5` (pinned to `run-id: inputs.run_id`) → authenticate (skip for
    API-less stores — go straight to minting the store's own canonical release artifact) →
    upload → submit for review if the store has one.
@@ -123,3 +141,4 @@ the reference set.
 | Running a Linux-only credential flow on `ubuntu-latest` | `msstore`'s Linux keyring needs `libsecret` + a D-Bus Secret Service daemon headless runners lack; use `windows-latest` (DPAPI works headless) — check each store's reference for runner-OS constraints (macOS-only for Apple signing/notarization, etc.) |
 | Treating store CLI/API version pins loosely | Pin third-party GitHub Actions to a specific tag; expiring OAuth refresh tokens (Chrome), rotating API keys (Edge), and session files (Steam `config.vdf`) all need scheduled secret rotation, not "set once" |
 | Version drift between the tag and the store manifest | Obsidian requires the release tag to equal `manifest.json`'s `version` verbatim (no `v` prefix); VS Marketplace/Open VSX need `package.json`'s version to match the app tag if versioned in lockstep — verify in CI before publishing, fail loud on mismatch |
+| Source-building publish workflow's checkout `ref` hardcoded to the same `inputs.tag` used for version validation | Add a separate `ref` input defaulting to `tag` (`ref: ${{ inputs.ref \|\| inputs.tag }}`) — a post-tag version-file fix then only needs a different `ref`, not moving/retagging the whole app release and re-running the entire build matrix |

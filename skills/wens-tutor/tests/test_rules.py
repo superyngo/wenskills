@@ -336,6 +336,16 @@ class TestApi(unittest.TestCase):
         self.assertEqual(result["correct"], 1)
         self.assertEqual(result["score"], 100.0)
 
+    def test_in_flight_attempt_can_be_deleted(self):
+        code, paper = api.handle(self.conn, "POST", "/api/paper", {}, {"cap": 10, "timed": False})
+        aid = paper["attempt_id"]
+        code, data = api.handle(self.conn, "GET", "/api/portal", {}, None)
+        self.assertEqual(len(data["in_flight"]), 1)
+        code, result = api.handle(self.conn, "DELETE", f"/api/attempt/{aid}", {}, None)
+        self.assertEqual(code, 200)
+        code, data = api.handle(self.conn, "GET", "/api/portal", {}, None)
+        self.assertEqual(len(data["in_flight"]), 0)
+
     def test_in_flight_payload_never_carries_the_key(self):
         code, paper = api.handle(self.conn, "POST", "/api/paper", {}, {"cap": 10, "timed": False})
         for source in (paper, api.handle(self.conn, "GET", f"/api/attempt/{paper['attempt_id']}", {}, None)[1]):

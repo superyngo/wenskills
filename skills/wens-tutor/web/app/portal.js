@@ -5,16 +5,11 @@ import * as api from "/app/api.js";
 const make = (tag, props) => Object.assign(document.createElement(tag), props || {});
 
 function courseCard(f) {
-  const pct = f.leaf_sections ? Math.round((f.read_sections / f.leaf_sections) * 100) : 0;
   const card = make("article", { className: "card" });
-  const bar = make("progress");
-  bar.max = f.leaf_sections || 1;
-  bar.value = f.read_sections;
   card.append(
     make("a", { href: `/reader?p=${encodeURIComponent(f.relpath)}`, textContent: f.title }),
-    bar,
     make("span", {
-      textContent: ` ${S.portal.progress} ${pct}% · ${S.portal.annotations} ${f.annotations}` +
+      textContent: ` ${S.portal.annotations} ${f.annotations}` +
         (f.orphans ? ` · ${S.portal.orphans} ${f.orphans}` : ""),
     }),
   );
@@ -23,8 +18,14 @@ function courseCard(f) {
 
 function bankCard(f, b) {
   const card = make("article", { className: "card" });
-  card.append(
+  const links = make("div", { className: "bank-links" });
+  links.append(
     make("a", { href: `/exam?bkey=${encodeURIComponent(b.bkey)}`, textContent: `${f.title} — ${b.title}` }),
+    make("a", { href: `/reader?p=${encodeURIComponent(f.relpath)}${b.path ? `&path=${encodeURIComponent(b.path)}` : ""}`,
+               textContent: S.portal.browse, className: "browse-link" }),
+  );
+  card.append(
+    links,
     make("span", {
       textContent: ` ${b.n_questions} 題 · ${S.portal.stars} ${b.stars}` +
         (b.defects ? ` · ${S.portal.defects} ${b.defects}` : ""),
@@ -69,13 +70,41 @@ async function main() {
   root.append(actions);
 
   for (const a of data.in_flight) {
-    root.append(make("a", {
+    const row = make("div", { className: "card in-flight" });
+    row.append(make("a", {
       href: `/exam?attempt=${a.attempt_id}`,
-      className: "card in-flight",
       textContent: `${S.portal.inFlight} · attempt #${a.attempt_id}`,
     }));
+    const del = make("button", { type: "button", textContent: S.reader.del });
+    del.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await api.del(`/api/attempt/${a.attempt_id}`);
+      row.remove();
+    });
+    row.append(del);
+    root.append(row);
   }
 
+  if (data.latest.length) {
+    const sec = make("section");
+    sec.append(make("h3", { textContent: S.portal.history }));
+    for (const a of data.latest) {
+      const row = make("div", { className: "card in-flight" });
+      row.append(make("a", {
+        href: `/exam?review=${a.id}`,
+        textContent: `${S.portal.review} · ${a.score}分 (${a.correct}/${a.total})`,
+      }));
+      const del = make("button", { type: "button", textContent: S.reader.del });
+      del.addEventListener("click", async (e) => {
+        e.preventDefault();
+        await api.del(`/api/attempt/${a.id}`);
+        row.remove();
+      });
+      row.append(del);
+      sec.append(row);
+    }
+    root.append(sec);
+  }
   for (const s of data.subjects) {
     const sec = make("section");
     sec.append(make("h2", { textContent: s.subject }));
