@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-09-02 — chore: migrate 8 dev-workflow skills to wensdev
+
+Moved `wens-dev-principles`, `vscode-dev-experience-pack`, `rust-crossplatform-app`,
+`publishing-platform-stores`, `github-init`, `dev-prompt`, `create-release-workflow`, and
+`git-release` out of this repo into a new bundled skills repo, `~/repos/wensdev`. Content
+unchanged in the move; `agm` skill symlinks repointed accordingly.
+
 ### 2026-08-13 — feat(wens-tutor): add courseware review skill with study site
 
 `skills/wens-tutor/` ships complete: SKILL.md, two reference docs, and the real-device smoke

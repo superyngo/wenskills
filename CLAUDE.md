@@ -23,26 +23,11 @@ skills/<skill-name>/
 - **Planning docs**: Go in `docs/plans/` with filename `YYYY-MM-DD-<topic>.md`.
 - **Distributable bundles**: `.skill` files at repo root are ZIP-packaged bundles of a skill directory — not source.
 
-## `dev-prompt` Skill
+## Migrated Skills
 
-- `references/base.md` — universal principles, always included first.
-- `compose_prompt.py` concatenates `base.md` + a language-specific module (`python.md`, `rust.md`, `javascript.md`, `scripting.md`).
-- `detect_language.py` returns JSON: `{"detected_language": "python"|null, "confidence": "high"|"medium"|"low"}`.
-
-## `git-release` Skill (formerly `push-update`)
-
-- Auto-detects project type via `Cargo.toml`, `package.json`, `pyproject.toml`, `go.mod`.
-- Runs quality checks (fmt, lint, test) before committing.
-- Follows [Conventional Commits](https://www.conventionalcommits.org/) to suggest semver bump.
-- Skips GitHub Releases if `.github/workflows/release.yml` exists.
-
-## `github-init` Skill
-
-- Initialises a GitHub Repo or Gist for the current directory.
-- Handles `git init`, skeleton file generation (README, CHANGELOG, LICENSE, .gitignore), and optionally `.github/workflows/release.yml` for binary projects.
-- Uses `gh repo create` / `gh gist create` for remote setup.
-- `release.yml` template adapted from Wenget's release workflow (all `wenget` references replaced with project name; "Update bucket binary" step removed).
-- Install snippet in README uses the generic `gpinstall.ps1` Gist.
+`wens-dev-principles`, `vscode-dev-experience-pack`, `rust-crossplatform-app`,
+`publishing-platform-stores`, `github-init`, `dev-prompt`, `create-release-workflow`, and
+`git-release` moved to `~/repos/wensdev` (2026-09-02). See that repo for their docs.
 
 ## Adding a New Skill
 
