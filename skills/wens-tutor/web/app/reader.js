@@ -3,6 +3,7 @@ import S from "/strings.js";
 import * as api from "/app/api.js";
 import * as render from "/app/render.js";
 import { openLookupResult } from "/app/host.js";
+import * as tables from "/app/tables.js";
 
 const params = new URLSearchParams(location.search);
 const relpath = params.get("p");
@@ -54,7 +55,9 @@ async function load() {
   document.getElementById("keys").textContent = `${S.keys.esc}　l ${S.reader.highlight}/${S.reader.clear}`;
   const source = await (await fetch(`/raw/${encodeURIComponent(relpath)}`)).text();
   render.renderInto(doc, source);
+  tables.enhanceTables(doc, relpath);
   hideAnswers();
+  hideExplanations();
   buildToc();
   await restoreAnnotations();
   jumpToTarget();
@@ -108,6 +111,23 @@ function hideAnswers() {
   }
 }
 
+/** Group an explanation label paragraph ("解析：…" or "**解析（…）：**") with the
+ * list that immediately follows it (the AI-generated per-option breakdown), so
+ * both stay hidden and reveal together on a single click — same UX as an answer. */
+function hideExplanations() {
+  for (const p of doc.querySelectorAll("p")) {
+    if (!/^解析[：:（(]/.test(p.textContent.trim())) continue;
+    const wrap = document.createElement("div");
+    p.before(wrap);
+    wrap.append(p);
+    const next = wrap.nextElementSibling;
+    if (next && (next.tagName === "UL" || next.tagName === "OL")) wrap.append(next);
+    wrap.classList.add("answer-hidden");
+    wrap.title = S.reader.revealExplanation;
+    wrap.addEventListener("click", () => wrap.classList.replace("answer-hidden", "answer-shown"));
+  }
+}
+
 async function restoreAnnotations() {
   const { annotations } = await api.get(`/api/annotations?p=${encodeURIComponent(relpath)}`);
   const list = document.getElementById("anns");
@@ -147,9 +167,33 @@ btnApply.textContent = S.reader.highlight;
 btnColor.textContent = S.reader.color;
 btnClear.textContent = S.reader.clear;
 
-btnColor.addEventListener("click", () => {
-  activeColor = COLORS[(COLORS.indexOf(activeColor) + 1) % COLORS.length];
-  btnColor.className = `swatch swatch--${activeColor}`;
+const colorMenu = document.createElement("div");
+colorMenu.className = "color-menu";
+colorMenu.hidden = true;
+for (const c of COLORS) {
+  const opt = document.createElement("button");
+  opt.type = "button";
+  opt.className = `swatch swatch--${c}`;
+  opt.addEventListener("click", () => {
+    activeColor = c;
+    btnColor.className = `swatch swatch--${activeColor}`;
+    colorMenu.hidden = true;
+  });
+  colorMenu.append(opt);
+}
+btnColor.insertAdjacentElement("afterend", colorMenu);
+
+btnColor.addEventListener("click", (e) => {
+  e.stopPropagation();
+  colorMenu.hidden = !colorMenu.hidden;
+  if (!colorMenu.hidden) {
+    const r = btnColor.getBoundingClientRect();
+    colorMenu.style.top = `${r.bottom + 4}px`;
+    colorMenu.style.left = `${r.left}px`;
+  }
+});
+document.addEventListener("click", (e) => {
+  if (!colorMenu.hidden && !colorMenu.contains(e.target) && e.target !== btnColor) colorMenu.hidden = true;
 });
 
 btnApply.addEventListener("click", async () => {

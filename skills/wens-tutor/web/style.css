@@ -27,6 +27,14 @@ header.app .toolbar button:disabled { opacity: .4; cursor: default; }
 }
 .swatch--yellow::before { background: #fff3a3; } .swatch--green::before { background: #b9f6c1; }
 .swatch--blue::before { background: #b3e0ff; } .swatch--pink::before { background: #ffc7e0; }
+.color-menu {
+  position: fixed; z-index: 110; display: flex; gap: .35rem;
+  background: #fff; border: 1px solid #ccc; border-radius: 4px;
+  padding: .35rem; box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.color-menu[hidden] { display: none; }
+.color-menu .swatch { width: var(--hit); height: var(--hit); padding: 0; border: 0; background: none; }
+.color-menu .swatch::before { left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; }
 
 footer.keys { position: sticky; bottom: 0; padding: .4rem var(--gap); border-top: 1px solid #ddd; background: #fff; font-size: .85rem; }
 .layout { padding: var(--gap); }
@@ -42,6 +50,21 @@ footer.keys { position: sticky; bottom: 0; padding: .4rem var(--gap); border-top
 mark.ann--yellow { background: #fff3a3; } mark.ann--green { background: #b9f6c1; }
 #doc { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 #doc pre, #doc table { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+#doc table { table-layout: fixed; }
+#doc th, #doc td { overflow: hidden; text-overflow: ellipsis; padding: .3rem .6rem; }
+#doc .table-wrap { position: relative; }
+#doc .col-resizer {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 20px;
+  transform: translateX(-50%);
+  cursor: col-resize; touch-action: none; z-index: 1;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+#doc .col-resizer::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 50%;
+  border-right: 5px solid #aaa;
+}
+#doc .col-resizer:hover::after, #doc .col-resizer:active::after { border-right-color: #666; }
+body.resizing-col { cursor: col-resize; user-select: none; }
 .katex-display { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
 #doc img { max-width: 100%; height: auto; }
 mark.ann--blue { background: #b3e0ff; } mark.ann--pink { background: #ffc7e0; }
