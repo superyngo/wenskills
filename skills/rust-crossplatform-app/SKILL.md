@@ -69,7 +69,7 @@ patterns, and per-platform playbooks kept in `references/`.
 - **Document the host seams.** Keep a per-host doc (TAURI.md, VSCODE.md…) plus a skeleton
   top-level guide; record any hand-edits inside generated projects as reapply-after-regen.
 - **UI behavior conventions** (focus, popups, re-renders, cross-host component sharing) are in
-  the companion `ui-design-principles` skill — apply it alongside this one for anything
+  the companion `wens-dev-principles` skill — apply it alongside this one for anything
   user-facing.
 
 ## Common Mistakes

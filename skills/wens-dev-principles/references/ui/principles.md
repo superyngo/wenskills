@@ -1,49 +1,64 @@
----
-name: ui-design-principles
-description: Use when designing, building, or reviewing any user-facing UI — TUI, web, touch, or app shell — covering keyboard navigation, scrollable lists, text input, focus/selection visuals, popups and menus, reorderable lists, cross-platform/RWD component sharing, single-source-of-truth architecture, native-surface preference, layout/resize, logging, i18n, version display, and PWA/installability/offline-first baseline. Apply whenever the user works on UI components, navigation, scrolling, input fields, list selection, popups, or asks how a UI element should look or behave, even if they don't explicitly say "design principles" or "conventions".
----
-
 # UI Design Principles
-
-## Overview
 
 High-level, implementation-agnostic conventions for user-facing UIs (TUI-first roots, extended
 with lessons from shipping one app across web desktop/touch, native desktop, Android, and an
 editor extension). These are *principles*, not code — apply the spirit, pick the implementation
-that fits the stack. Heavy detail lives in `references/`.
+that fits the stack. Heavy detail lives in the sibling references linked per principle.
 
-## When to Use
+## Index
 
-Designing or reviewing any interactive surface: lists, menus, forms, text fields, popups,
-navigation, layout, cross-platform ports. When in doubt about how a control *should* behave,
-default to the matching principle below rather than inventing one.
+| # | Grade | Principle |
+|---|---|---|
+| 1 | MUST | Single source of truth, always, for everything |
+| 2 | SHOULD | Cross-platform adaptation order |
+| 3 | SHOULD | Prefer native surfaces over custom chrome |
+| 4 | SHOULD | Shared interface for identical operations |
+| 5 | MUST | Focus cursor always visible, unique, unbroken |
+| 6 | SHOULD | Committed + preview two-set selection model |
+| 7 | MUST | Sticky-cursor viewport scrolling |
+| 8 | MUST | Confirm destructive actions; preserve state across redraws |
+| 9 | MUST | Failure never destroys work-in-progress |
+| 10 | MUST | Text inputs honor full editing contract |
+| 11 | SHOULD | Everything overflow-able scrolls, with keys |
+| 12 | SHOULD | Space cycles single-choice inputs |
+| 13 | SHOULD | Del clears clearable inputs |
+| 14 | SHOULD | Global keys consistent, with key-hint footer |
+| 15 | SHOULD | Click-opened surfaces toggle closed on second trigger click |
+| 16 | MUST | Render is a pure function of state |
+| 17 | MUST | Downward moves need index correction |
+| 18 | SHOULD | Header/version/About checklist (Help+About panel merge: CONSIDER) |
+| 19 | SHOULD | Layout is resize-aware |
+| 20 | SHOULD | Degrade gracefully |
+| 21 | MUST | Logging never pollutes the UI |
+| 22 | SHOULD | Plan i18n upfront |
+| 23 | SHOULD | PWA is a baseline, not an afterthought |
 
 ## A. Architecture
 
-1. **Single source of truth, always, for everything.** State (one headless core; gesture →
+1. **[MUST]** Single source of truth, always, for everything. State (one headless core; gesture →
    intent → snapshot → render), business rules/legality (UI asks the core, never pre-judges),
    strings (one i18n catalog), version (build-stamped from the manifest), About/info text,
    assets/styles, and the host↔core wire contract. Every duplicated copy is a future
-   inconsistency bug. **Full table + why:** [references/single-source-and-cross-platform.md](references/single-source-and-cross-platform.md).
+   inconsistency bug. **Full table + why:** [references/ui/single-source-and-cross-platform.md](single-source-and-cross-platform.md).
 
-2. **Cross-platform adaptation order: shared component with per-host adaptation first; a
-   dedicated shell on the same core second; additive `pointer:coarse`-style bolt-ons never.**
+2. **[SHOULD]** Cross-platform adaptation order: shared component with per-host adaptation first; a
+   dedicated shell on the same core second; additive `pointer:coarse`-style bolt-ons never.
    Lock shared field/control order across hosts; one mechanism per host per surface class.
    **Details:** same reference, §2.
 
-3. **Prefer the platform's native surfaces over custom chrome.** Native menu bar/title
+3. **[SHOULD]** Prefer the platform's native surfaces over custom chrome. Native menu bar/title
    bar/dialogs/extension contribution points replace (not duplicate) the in-app equivalent on
    that platform; cede host-owned concerns (file I/O, dirty state, undo in an editor host) to
    the host. The custom control should exist only where no native home exists. **Details:**
    same reference, §3.
 
-4. **Shared interface for identical operations.** The same logical action (move, select,
+4. **[SHOULD]** Shared interface for identical operations. The same logical action (move, select,
    confirm, delete, search) is one shared component/interface reused everywhere; divergent
    one-off implementations drift and force per-screen relearning.
 
 ## B. Focus, selection, feedback
 
-5. **The focus cursor is always visible, unique, and unbroken.** Exactly one row/control gets
+5. **[MUST]** The focus cursor is always visible, unique, and unbroken. Exactly one row/control gets
    the strong focus treatment (inverse video / solid fill); multi-selection and path/ancestor
    hints use a *distinct, weaker* highlight so they never masquerade as the cursor. No state —
    paste mode, error, filter, prompt — may make the cursor visually disappear or blend in: the
@@ -51,93 +66,93 @@ default to the matching principle below rather than inventing one.
    line/toast, not by dimming or recoloring rows (row-dim "validity" cues were tried and
    removed — they read as lost focus).
 
-6. **Selection uses a committed + preview two-set model** for toggle-select plus range-select.
+6. **[SHOULD]** Selection uses a committed + preview two-set model for toggle-select plus range-select.
    Shift-drag writes only the preview overlay; it merges on commit. **Full state model:**
-   [references/list-selection-model.md](references/list-selection-model.md).
+   [references/ui/list-selection-model.md](list-selection-model.md).
 
-7. **Selection lists use sticky-cursor scrolling.** Cursor moves within the viewport first;
+7. **[MUST]** Selection lists use sticky-cursor scrolling. Cursor moves within the viewport first;
    scroll offset moves only at the edges. Keep `selected_index` (data) and `scroll_offset`
    (screen) separate; derive the screen row. **Full spec:**
-   [references/scrollable-list-viewport.md](references/scrollable-list-viewport.md).
+   [references/ui/scrollable-list-viewport.md](scrollable-list-viewport.md).
 
-8. **Confirm destructive actions; preserve state across redraws.** Explicit confirmation before
+8. **[MUST]** Confirm destructive actions; preserve state across redraws. Explicit confirmation before
    delete/overwrite; on any redraw/reload/edit, preserve cursor, selection, scroll, and expanded
    state (restore by identity, not index) — never silently reset.
 
-9. **Failure never destroys work-in-progress.** Failed paste keeps the clipboard; cancelled add
+9. **[MUST]** Failure never destroys work-in-progress. Failed paste keeps the clipboard; cancelled add
    rolls back; mutations are atomic. The user can always retry without redoing setup.
 
 ## C. Keyboard & input contracts
 
-10. **Text inputs honor the full editing contract: move + select + edit + clipboard.** Beyond
+10. **[MUST]** Text inputs honor the full editing contract: move + select + edit + clipboard. Beyond
     arrows + Home/End (and PgUp/PgDn for multi-line), every text field supports Shift+move
     selection, word/line jumps, delete char/word, cut/copy/paste, and undo/redo — using the
     platform-correct modifier (Cmd on macOS, Ctrl on Win/Linux, Emacs-style `Ctrl+A/E/K/U/W/Y`
     in a TUI where `Shift+arrow` and `Ctrl+C`/`Ctrl+Z` are unreliable or host-owned). Cut is
     atomic (copy-first, delete-on-success); failed paste preserves the field; undo restores the
     caret, not just the text. **Full key tables, TUI fallbacks, and the `Ctrl+A`/`Ctrl+C`
-    conflicts:** [references/text-editing-contract.md](references/text-editing-contract.md).
+    conflicts:** [references/ui/text-editing-contract.md](text-editing-contract.md).
 
-11. **Everything that can overflow, scrolls — with keys.** Lists, logs, detail popups, help
+11. **[SHOULD]** Everything that can overflow, scrolls — with keys. Lists, logs, detail popups, help
     overlays, info panels, inline editors: all support line-wise (arrows), page-wise
     (PgUp/PgDn), and jump (Home/End) navigation, and long lines wrap or scroll rather than
     clip. Never require a mouse to reach content.
 
-12. **Space cycles single-choice inputs.** Any control picking one value from a small closed
+12. **[SHOULD]** Space cycles single-choice inputs. Any control picking one value from a small closed
     set (bool, enum, tri-state) advances on Space; Space also closes toggle-opened info popups.
 
-13. **Del clears clearable inputs.** Any input whose value may legitimately be empty clears on
+13. **[SHOULD]** Del clears clearable inputs. Any input whose value may legitimately be empty clears on
     Del as one keystroke.
 
-14. **Global keys are consistent, with a key-hint footer.** Esc = cancel/back (peeling ONE
+14. **[SHOULD]** Global keys are consistent, with a key-hint footer. Esc = cancel/back (peeling ONE
     layer at a time), Enter = confirm, same keys everywhere; surface currently-available keys
     persistently.
 
 ## D. Popups, menus, re-renders (pointer UIs)
 
-15. **Every click-opened surface toggles closed on a second trigger click.** Wire it when the
+15. **[SHOULD]** Every click-opened surface toggles closed on a second trigger click. Wire it when the
     trigger is born, not when someone complains. **This plus the rest of the popup/re-render/
     event contract** — geometry-before-dispatch, responsive size caps, mode-peel-on-dismiss,
     scroll restore, `stopPropagation` on panel inputs, attribute escaping, manual dblclick,
     wheel-nudge — **is specified in:**
-    [references/pointer-ui-gotchas.md](references/pointer-ui-gotchas.md).
+    [references/ui/pointer-ui-gotchas.md](pointer-ui-gotchas.md).
 
-16. **Render is a pure function of state.** A wrong highlight means a wrong snapshot — fix the
+16. **[MUST]** Render is a pure function of state. A wrong highlight means a wrong snapshot — fix the
     state layer, never patch the renderer to compensate.
 
 ## E. Reorderable lists
 
-17. **Downward moves need index correction.** After delete-then-reinsert, subtract every source
+17. **[MUST]** Downward moves need index correction. After delete-then-reinsert, subtract every source
     (including attached decorations/comments) removed *above* the target index — for both the
     landing slot and the follow-up selection. Upward moves passing proves nothing. **Spec +
-    test checklist:** [references/reorder-index-offsets.md](references/reorder-index-offsets.md).
+    test checklist:** [references/ui/reorder-index-offsets.md](reorder-index-offsets.md).
 
 ## F. Chrome, layout, plumbing
 
-18. **Header shows app name + version; About has a fixed content checklist; Help and About may
-    share one panel.** Version is build-stamped (principle 1); a version visible in sample/demo
+18. **[SHOULD]** Header shows app name + version; About has a fixed content checklist; Help and About may
+    share one panel. Version is build-stamped (principle 1); a version visible in sample/demo
     content doubles as a stale-cache check. About content is single-sourced and complete: app
     description, version, author, project URL, privacy policy, license — copyright and
     third-party notices only when applicable. Help and About fit naturally as **one switchable
-    panel** (tabs/sections) since both are infrequent, short-lived info surfaces — recommended,
+    panel** (tabs/sections) since both are infrequent, short-lived info surfaces — **[CONSIDER]** recommended,
     not mandatory. **Full checklist + panel pattern:**
-    [references/single-source-and-cross-platform.md](references/single-source-and-cross-platform.md) §4.
+    [references/ui/single-source-and-cross-platform.md](single-source-and-cross-platform.md) §4.
 
-19. **Layout is resize-aware.** Recompute layout/viewport on every resize; never hardcode
+19. **[SHOULD]** Layout is resize-aware. Recompute layout/viewport on every resize; never hardcode
     dimensions. Popups obey the responsive size caps (reference in 15).
 
-20. **Degrade gracefully.** Honor `NO_COLOR`; ASCII fallback for narrow/limited terminals;
+20. **[SHOULD]** Degrade gracefully. Honor `NO_COLOR`; ASCII fallback for narrow/limited terminals;
     consistent color semantics (red danger, green success, yellow warning).
 
-21. **Logging never pollutes the UI.** In a TUI, stdout/stderr are the drawing surface — route
+21. **[MUST]** Logging never pollutes the UI. In a TUI, stdout/stderr are the drawing surface — route
     logs to a file/pane; one consistent scheme app-wide.
 
-22. **Plan i18n upfront.** Externalize all user-facing strings from day one; tolerate variable
+22. **[SHOULD]** Plan i18n upfront. Externalize all user-facing strings from day one; tolerate variable
     text length, CJK width, RTL. Retrofitting is far costlier.
 
 ## G. Web (PWA)
 
-23. **On the web, PWA is a baseline, not an afterthought.** Ship installable from day one:
+23. **[SHOULD]** On the web, PWA is a baseline, not an afterthought. Ship installable from day one:
     one web manifest sourced from the same app metadata as the version/About panel (principles
     1, 18), a service worker for offline-first shell loading, and standalone display + theme
     color so the installed app sheds browser chrome. Retrofitting a service worker into a

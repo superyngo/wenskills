@@ -1,7 +1,7 @@
 # Per-Platform Best Practices & Gotchas
 
 Each item below is a shipped lesson, not theory. Organized per host; the shared UI conventions
-live in the `ui-design-principles` skill — apply both.
+live in the `wens-dev-principles` skill — apply both.
 
 ## CLI
 
@@ -52,7 +52,7 @@ live in the `ui-design-principles` skill — apply both.
 - Capabilities: `core:default` bundles are curated subsets — expect to add explicit lines
   (e.g. `core:webview:allow-set-webview-zoom`); custom plugins need their permission listed.
 - Hide the in-app toolbar header on desktop; use the native title bar + menus (see
-  ui-design-principles §native surfaces).
+  wens-dev-principles §3 (native surfaces)).
 - Platform-specific config via `tauri.<platform>.conf.json` auto-merge — e.g. Windows override
   empties `beforeBuildCommand` (bash/git don't run under its build shell); Android carries the
   `fileAssociations` so macOS Finder doesn't register handlers you don't implement.
