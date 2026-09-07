@@ -1,18 +1,25 @@
 ---
 name: yt-channel-dl
-description: 從 YouTube 頻道或播放清單 URL 下載所有影片音頻為 MP3（或其他格式），支援斷點續傳與擬人化爬取
-argument-hint: "[url] [output_dir] [--format mp3|aac|m4a|flac]"
+description: 從 YouTube 頻道或播放清單 URL 下載影片音訊（MP3/AAC/M4A/FLAC）或影片檔（MP4/MKV/WEBM），支援斷點續傳與擬人化爬取
+argument-hint: "[url] [output_dir] [--type audio|video] [--format ...]"
 allowed-tools: Bash, AskUserQuestion
 ---
 
-# YouTube Channel / Playlist Audio Downloader
+# YouTube Channel / Playlist Downloader
 
-從 YouTube 頻道或播放清單下載所有影片音頻，輸出為 MP3（預設）、AAC、M4A 或 FLAC。
+從 YouTube 頻道或播放清單下載所有影片，輸出為：
+**音訊**（MP3 預設、AAC、M4A、FLAC）或**影片**（MP4 預設、MKV、WEBM）。
 支援斷點續傳（自動跳過已下載）與擬人化爬取（隨機延遲 + User-Agent 輪換）。
 
 ---
 
 ## 步驟 1：收集參數
+
+**先確認下載類型**。若未以 `--type` 指定，用 AskUserQuestion 詢問：
+
+> 請選擇要下載的類型
+> - 音訊（mp3 / aac / m4a / flac）
+> - 影片（mp4 / mkv / webm）
 
 從第一個 argument 取得 `url`。若未提供，詢問：
 
@@ -22,9 +29,12 @@ allowed-tools: Bash, AskUserQuestion
 
 從第二個 argument 取得 `output_dir`。若未提供，詢問：
 
-> 請提供音頻檔案儲存路徑（例如：`~/Music/ChannelName`）
+> 請提供檔案儲存路徑（例如：音訊 `~/Music/ChannelName`、影片 `~/Movies/ChannelName`）
 
-從 `--format` argument 取得格式，預設 `mp3`。
+依下載類型從 `--format` argument 取得格式：
+- 音訊：mp3 / aac / m4a / flac（預設 `mp3`）
+- 影片：mp4 / mkv / webm（預設 `mp4`）
+- 若格式與類型不符，提示用戶重新選擇該類型下的格式。
 
 ---
 
@@ -67,6 +77,18 @@ yt-dlp 需要 JavaScript runtime 才能解析 YouTube。
 ```
 詢問用戶選擇，若選 1 則將 format 改為 `m4a`，若選 2 則停止等待安裝。
 
+**若 `has_ffmpeg == false` 且 type 為 `video`：**
+```
+警告：未偵測到 ffmpeg，無法合併高畫質影片與音訊串流。
+選項：
+  1. 安裝 ffmpeg 後重新執行（建議，可下載最佳畫質）
+     macOS:   brew install ffmpeg
+     Ubuntu:  sudo apt install ffmpeg
+     Windows: winget install ffmpeg
+  2. 繼續下載（僅能取得預先合併的低畫質版本，約 720p 以下）
+```
+詢問用戶選擇，若選 1 則停止等待安裝，若選 2 則繼續（腳本會自動降級為預合併串流）。
+
 ---
 
 ## 步驟 3：執行下載
@@ -77,6 +99,7 @@ yt-dlp 需要 JavaScript runtime 才能解析 YouTube。
 ```bash
 uv run --with yt-dlp python3 skills/yt-channel-dl/scripts/download_channel.py \
   "<url>" "<output_dir>" \
+  --type <type> \
   --format <fmt> \
   --rate-limit 500K \
   --status-file "<output_dir>/status.json" \
@@ -87,6 +110,7 @@ uv run --with yt-dlp python3 skills/yt-channel-dl/scripts/download_channel.py \
 ```bash
 python3 skills/yt-channel-dl/scripts/download_channel.py \
   "<url>" "<output_dir>" \
+  --type <type> \
   --format <fmt> \
   --rate-limit 500K \
   --status-file "<output_dir>/status.json" \
@@ -143,8 +167,8 @@ while kill -0 <PID> 2>/dev/null; do sleep 30; done && cat "<output_dir>/status.j
 |---|---|---|
 | `url` | — | YouTube 頻道或播放清單 URL |
 | `output_dir` | — | 輸出目錄（自動建立） |
-| `--format` | `mp3` | 音頻格式：mp3 / aac / m4a / flac |
-| `--rate-limit` | `500K` | 下載限速（例：`1M`、`500K`） |
+| `--type` | `audio` | 下載類型：`audio`（音訊）/ `video`（影片） |
+| `--format` | 音訊 `mp3`、影片 `mp4` | 音訊：mp3 / aac / m4a / flac；影片：mp4 / mkv / webm |
 | `--min-sleep` | `2` | 每影片最短延遲秒數 |
 | `--max-sleep` | `8` | 每影片最長延遲秒數 |
 | `--burst` | `10` | 每 N 部影片後休息 |

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Download all audio from a YouTube channel or playlist.
+"""Download all audio or video from a YouTube channel or playlist.
 
 Usage:
     python3 download_channel.py <url> <output_dir>
-        [--format mp3|aac|m4a|flac]
+        [--type audio|video]
+        [--format mp3|aac|m4a|flac|mp4|mkv|webm]
         [--rate-limit 500K]
         [--min-sleep 2] [--max-sleep 8]
         [--burst 10] [--burst-sleep 45]
@@ -97,10 +98,15 @@ def filter_pending(entries, downloaded_ids):
     return [e for e in entries if e.get("id") and e["id"] not in downloaded_ids]
 
 
-def build_ydl_opts(output_dir, fmt, ffmpeg_path, rate_limit, user_agent, cookies_from_browser=None):
-    """Build yt-dlp YoutubeDL options dict for a single video download."""
+VIDEO_FORMAT_SELECTORS = {
+    "mp4": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best",
+    "webm": "bestvideo[ext=webm]+bestaudio[ext=webm]/bestvideo+bestaudio/best",
+    "mkv": "bestvideo+bestaudio/best",
+}
+
+def build_ydl_opts(output_dir, fmt, ffmpeg_path, rate_limit, user_agent, cookies_from_browser=None, media_type="audio"):
+    """Build yt-dlp YoutubeDL options dict for a single download."""
     opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio/best" if (not ffmpeg_path and fmt == "m4a") else "bestaudio/best",
         "outtmpl": str(Path(output_dir) / "%(title)s [%(id)s].%(ext)s"),
         "http_headers": {"User-Agent": user_agent},
         "retries": 3,
@@ -108,18 +114,31 @@ def build_ydl_opts(output_dir, fmt, ffmpeg_path, rate_limit, user_agent, cookies
         "no_warnings": True,
         "remote_components": ["ejs:github"],
     }
+    if media_type == "video":
+        # Merging separate video+audio streams needs ffmpeg; without it fall
+        # back to pre-merged progressive formats (quality capped ~720p).
+        opts["format"] = VIDEO_FORMAT_SELECTORS[fmt] if ffmpeg_path else "best[ext=mp4]/best"
+        if ffmpeg_path:
+            opts["merge_output_format"] = fmt
+    else:
+        opts["format"] = (
+            "bestaudio[ext=m4a]/bestaudio/best"
+            if (not ffmpeg_path and fmt == "m4a")
+            else "bestaudio/best"
+        )
+        if ffmpeg_path:
+            opts["postprocessors"] = [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": fmt,
+                    "preferredquality": "192",
+                }
+            ]
     if cookies_from_browser:
         opts["cookiesfrombrowser"] = (cookies_from_browser,)
     if rate_limit:
         opts["ratelimit"] = rate_limit
     if ffmpeg_path:
-        opts["postprocessors"] = [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": fmt,
-                "preferredquality": "192",
-            }
-        ]
         opts["ffmpeg_location"] = ffmpeg_path
     return opts
 
@@ -216,15 +235,23 @@ def main():
         sys.exit(1)
 
     parser = argparse.ArgumentParser(
-        description="Download all audio from a YouTube channel or playlist."
+        description="Download all audio or video from a YouTube channel or playlist."
     )
     parser.add_argument("channel_url", help="YouTube channel or playlist URL")
-    parser.add_argument("output_dir", help="Directory to save audio files")
+    parser.add_argument("output_dir", help="Directory to save downloaded files")
+    parser.add_argument(
+        "--type",
+        choices=["audio", "video"],
+        default="audio",
+        dest="media_type",
+        help="Media type to download (default: audio)",
+    )
     parser.add_argument(
         "--format",
-        default="mp3",
-        choices=["mp3", "aac", "m4a", "flac"],
+        default=None,
+        choices=["mp3", "aac", "m4a", "flac", "mp4", "mkv", "webm"],
         dest="fmt",
+        help="Audio: mp3/aac/m4a/flac; video: mp4/mkv/webm (default: mp3 or mp4)",
     )
     parser.add_argument("--rate-limit", default="500K")
     parser.add_argument("--min-sleep", type=float, default=2.0)
@@ -241,7 +268,15 @@ def main():
         parser.error("--burst must be >= 1")
 
     ffmpeg_path = args.ffmpeg_path or shutil.which("ffmpeg")
-    fmt = args.fmt
+    fmt = args.fmt or ("mp4" if args.media_type == "video" else "mp3")
+    valid_formats = (
+        ("mp4", "mkv", "webm") if args.media_type == "video" else ("mp3", "aac", "m4a", "flac")
+    )
+    if args.fmt is not None and fmt not in valid_formats:
+        parser.error(
+            f"--format {fmt} is invalid for --type {args.media_type} "
+            f"(choose from: {', '.join(valid_formats)})"
+        )
 
     if fmt in ("mp3", "aac", "flac") and not ffmpeg_path:
         print(
@@ -250,6 +285,13 @@ def main():
             file=sys.stderr,
         )
         fmt = "m4a"
+
+    if args.media_type == "video" and not ffmpeg_path:
+        print(
+            "WARNING: ffmpeg not found — video merging requires ffmpeg. "
+            "Falling back to pre-merged progressive streams (max ~720p).",
+            file=sys.stderr,
+        )
 
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     rate_limit = parse_rate_limit(args.rate_limit)
@@ -312,7 +354,7 @@ def main():
             "pending_count": len(pending), "started_at": started_at,
         })
 
-        opts = build_ydl_opts(args.output_dir, fmt, ffmpeg_path, rate_limit, ua, args.cookies_from_browser)
+        opts = build_ydl_opts(args.output_dir, fmt, ffmpeg_path, rate_limit, ua, args.cookies_from_browser, media_type=args.media_type)
         opts["progress_hooks"] = [make_progress_hook(title)]
 
         try:

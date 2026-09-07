@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-09-07 — feat(yt-channel-dl): video download support with startup type confirmation
+
+- Added `--type audio|video` to `download_channel.py` — video mode fetches `bestvideo+bestaudio`
+  and merges to MP4 (default), MKV, or WEBM via ffmpeg; without ffmpeg it falls back to
+  pre-merged progressive streams (~720p cap) with a warning
+- SKILL.md step 1 now asks the download type (audio or video) first via AskUserQuestion,
+  then the format list follows the chosen type (`mp3/aac/m4a/flac` vs `mp4/mkv/webm`);
+  invalid type/format pairs are rejected
+- Verified end-to-end with a real YouTube video: separate streams downloaded and merged
+  into a valid MP4 (av1 video + aac audio)
+
 ### 2026-09-07 — feat(wens-tutor): toggle-style answer/explanation reveal with page-wide switch
 
 Reader browse mode: answer and explanation blocks are toggled by a per-block 顯示/隱藏
