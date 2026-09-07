@@ -25,6 +25,8 @@ button — the block body no longer toggles on click, so text selection for high
 never triggers a reveal. Adds a page-wide 顯示/隱藏全部答案 toggle button to the reader
 toolbar (hidden when the page has no answer blocks). Verified end-to-end in a real browser
 against a live 試卷 (50 blocks: show-all, per-item re-hide, hide-all, per-item re-show).
+Reveal state persists per document in localStorage; the page-wide hide-all also clears
+the saved state as a reset.
 
 ### 2026-09-02 — chore: migrate 8 dev-workflow skills to wensdev
 

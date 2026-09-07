@@ -58,7 +58,13 @@ async function load() {
   tables.enhanceTables(doc, relpath);
   hideAnswers();
   hideExplanations();
-  document.getElementById("reveal-toggle").hidden = hiddenBlocks.length === 0;
+  const btnReveal = document.getElementById("reveal-toggle");
+  for (const i of JSON.parse(localStorage.getItem(`reveal:${relpath}`) || "[]")) {
+    if (hiddenBlocks[i]) setBlock(hiddenBlocks[i], true);
+  }
+  btnReveal.hidden = hiddenBlocks.length === 0;
+  btnReveal.textContent = hiddenBlocks.some((el) => el.classList.contains("answer-hidden"))
+    ? S.reader.showAll : S.reader.hideAll;
   buildToc();
   await restoreAnnotations();
   jumpToTarget();
@@ -113,7 +119,10 @@ function makeToggle(el, revealText, hideText) {
   btn.className = "reveal-btn";
   btn.textContent = S.reader.reveal;
   btn.title = revealText;
-  btn.addEventListener("click", () => setBlock(el, el.classList.contains("answer-hidden")));
+  btn.addEventListener("click", () => {
+    setBlock(el, el.classList.contains("answer-hidden"));
+    saveReveals();
+  });
   el.prepend(btn);
 }
 
@@ -123,6 +132,11 @@ function setBlock(el, show) {
   const btn = el.querySelector(".reveal-btn");
   btn.textContent = show ? S.reader.conceal : S.reader.reveal;
   btn.title = show ? el.dataset.hide : el.dataset.reveal;
+}
+
+function saveReveals() {
+  localStorage.setItem(`reveal:${relpath}`, JSON.stringify(
+    hiddenBlocks.map((el, i) => (el.classList.contains("answer-shown") ? i : -1)).filter((i) => i >= 0)));
 }
 function hideAnswers() {
   for (const p of doc.querySelectorAll("p")) {
@@ -330,6 +344,7 @@ btnReveal.addEventListener("click", () => {
   const show = hiddenBlocks.some((el) => el.classList.contains("answer-hidden"));
   for (const el of hiddenBlocks) setBlock(el, show);
   btnReveal.textContent = show ? S.reader.hideAll : S.reader.showAll;
+  if (show) saveReveals(); else localStorage.removeItem(`reveal:${relpath}`); // hide-all = reset
 });
 
 // Save scroll position (debounced) for restore on next load
