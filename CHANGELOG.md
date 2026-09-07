@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-09-07 — feat(wens-tutor): toggle-style answer/explanation reveal with page-wide switch
+
+Reader browse mode: answer and explanation blocks are now toggleable — clicking a hidden
+block reveals it, clicking again re-hides it (previously reveal was one-way). Adds a
+page-wide 顯示/隱藏全部答案 toggle button to the reader toolbar (hidden when the page has
+no answer blocks). Verified end-to-end in a real browser against a live 試卷 (50 blocks:
+show-all, per-item re-hide, hide-all, per-item re-show).
+
 ### 2026-09-02 — chore: migrate 8 dev-workflow skills to wensdev
 
 Moved `wens-dev-principles`, `vscode-dev-experience-pack`, `rust-crossplatform-app`,

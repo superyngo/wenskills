@@ -58,6 +58,7 @@ async function load() {
   tables.enhanceTables(doc, relpath);
   hideAnswers();
   hideExplanations();
+  document.getElementById("reveal-toggle").hidden = hiddenBlocks.length === 0;
   buildToc();
   await restoreAnnotations();
   jumpToTarget();
@@ -101,13 +102,26 @@ function jumpToAnnotation(annId) {
   setTimeout(() => mark.classList.remove("flash"), 1500);
 }
 
+const hiddenBlocks = []; // answer/explanation blocks eligible for page-wide toggle
+
+function makeToggle(el, revealText, hideText) {
+  hiddenBlocks.push(el);
+  el.classList.add("answer-hidden");
+  el.dataset.reveal = revealText;
+  el.dataset.hide = hideText;
+  el.title = revealText;
+  el.addEventListener("click", () => setBlock(el, el.classList.contains("answer-hidden")));
+}
+
+function setBlock(el, show) {
+  el.classList.toggle("answer-shown", show);
+  el.classList.toggle("answer-hidden", !show);
+  el.title = show ? el.dataset.hide : el.dataset.reveal;
+}
+
 function hideAnswers() {
   for (const p of doc.querySelectorAll("p")) {
-    if (/答案[：:]/.test(p.textContent)) {
-      p.classList.add("answer-hidden");
-      p.title = S.reader.revealAnswer;
-      p.addEventListener("click", () => p.classList.replace("answer-hidden", "answer-shown"));
-    }
+    if (/答案[：:]/.test(p.textContent)) makeToggle(p, S.reader.revealAnswer, S.reader.hideAnswer);
   }
 }
 
@@ -122,9 +136,7 @@ function hideExplanations() {
     wrap.append(p);
     const next = wrap.nextElementSibling;
     if (next && (next.tagName === "UL" || next.tagName === "OL")) wrap.append(next);
-    wrap.classList.add("answer-hidden");
-    wrap.title = S.reader.revealExplanation;
-    wrap.addEventListener("click", () => wrap.classList.replace("answer-hidden", "answer-shown"));
+    makeToggle(wrap, S.reader.revealExplanation, S.reader.hideExplanation);
   }
 }
 
@@ -304,6 +316,16 @@ for (const [btn, panel] of [["toc-toggle", "toc"], ["ann-toggle", "anns"]]) {
   document.getElementById(btn).addEventListener("click", () =>
     document.getElementById(panel).classList.toggle("open"));
 }
+
+// Page-wide reveal/hide toggle: shows all hidden answers/explanations,
+// or hides them all again when everything is already shown.
+const btnReveal = document.getElementById("reveal-toggle");
+btnReveal.textContent = S.reader.showAll;
+btnReveal.addEventListener("click", () => {
+  const show = hiddenBlocks.some((el) => el.classList.contains("answer-hidden"));
+  for (const el of hiddenBlocks) setBlock(el, show);
+  btnReveal.textContent = show ? S.reader.hideAll : S.reader.showAll;
+});
 
 // Save scroll position (debounced) for restore on next load
 let scrollTimer;
