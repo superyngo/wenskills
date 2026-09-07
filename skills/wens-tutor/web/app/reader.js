@@ -103,22 +103,27 @@ function jumpToAnnotation(annId) {
 }
 
 const hiddenBlocks = []; // answer/explanation blocks eligible for page-wide toggle
-
 function makeToggle(el, revealText, hideText) {
   hiddenBlocks.push(el);
   el.classList.add("answer-hidden");
   el.dataset.reveal = revealText;
   el.dataset.hide = hideText;
-  el.title = revealText;
-  el.addEventListener("click", () => setBlock(el, el.classList.contains("answer-hidden")));
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "reveal-btn";
+  btn.textContent = S.reader.reveal;
+  btn.title = revealText;
+  btn.addEventListener("click", () => setBlock(el, el.classList.contains("answer-hidden")));
+  el.prepend(btn);
 }
 
 function setBlock(el, show) {
   el.classList.toggle("answer-shown", show);
   el.classList.toggle("answer-hidden", !show);
-  el.title = show ? el.dataset.hide : el.dataset.reveal;
+  const btn = el.querySelector(".reveal-btn");
+  btn.textContent = show ? S.reader.conceal : S.reader.reveal;
+  btn.title = show ? el.dataset.hide : el.dataset.reveal;
 }
-
 function hideAnswers() {
   for (const p of doc.querySelectorAll("p")) {
     if (/答案[：:]/.test(p.textContent)) makeToggle(p, S.reader.revealAnswer, S.reader.hideAnswer);
