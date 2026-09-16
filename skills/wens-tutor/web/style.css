@@ -66,7 +66,7 @@ mark.ann--yellow { background: #fff3a3; } mark.ann--green { background: #b9f6c1;
 #doc .col-resizer:hover::after, #doc .col-resizer:active::after { border-right-color: #666; }
 body.resizing-col { cursor: col-resize; user-select: none; }
 .katex-display { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
-#doc img { max-width: 100%; height: auto; }
+#doc img { max-width: 100%; height: auto; cursor: zoom-in; }
 mark.ann--blue { background: #b3e0ff; } mark.ann--pink { background: #ffc7e0; }
 
 /* Wikilinks ([[#heading|alias]]) and image embeds (![[file|w]]) — render.js */
@@ -74,6 +74,9 @@ mark.ann--blue { background: #b3e0ff; } mark.ann--pink { background: #ffc7e0; }
 .wikilink:hover { text-decoration: underline; }
 .wikilink--broken { color: #999; border-block-end: 1px dashed #d33; cursor: default; }
 #doc pre.mermaid svg { max-width: 100%; height: auto; }
+.img-zoom-overlay { position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,.75);
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.img-zoom-overlay img { max-width: 95vw; max-height: 95vh; object-fit: contain; cursor: zoom-out; }
 
 /* In-flight attempt card: link + delete button side by side */
 .card.in-flight { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }

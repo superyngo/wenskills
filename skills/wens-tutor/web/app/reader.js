@@ -345,6 +345,22 @@ function showLookup(term) {
   })();
 }
 
+// --- Image zoom (delegated once; #doc's content is replaced on each load) -----
+
+doc.addEventListener("click", (e) => {
+  const img = e.target.closest("img");
+  if (!img || !doc.contains(img)) return;
+  const overlay = document.createElement("div");
+  overlay.className = "img-zoom-overlay";
+  const big = document.createElement("img");
+  big.src = img.src;
+  big.alt = img.alt;
+  overlay.append(big);
+  overlay.addEventListener("click", () => overlay.remove());
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") overlay.remove(); }, { once: true });
+  document.body.append(overlay);
+});
+
 
 // --- Navigation ---------------------------------------------------------------
 

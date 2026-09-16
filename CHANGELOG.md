@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-09-16 — feat(wens-tutor): click-to-zoom on Course images
+
+- `reader.js` adds a delegated click handler on `#doc`: clicking any image opens a fixed
+  full-viewport overlay with the image at up to 95vw/95vh; click the overlay or press Escape
+  to close (mirrors the existing `showLookup` popup's close pattern)
+- No third-party dependency — hand-rolled vanilla CSS/JS (~15 lines), consistent with the
+  rest of the web layer, which only vendors libraries doing something non-trivial to
+  reimplement (KaTeX, Mermaid); a zoom toggle does not clear that bar
+- Verified in a headless browser against the real corpus embed: click opens the overlay with
+  the correct full-size image, Escape closes it
+
 ### 2026-09-16 — feat(wens-tutor): mermaid flowcharts, wikilinks, and image embeds in Course prose
 
 - `render.js` now renders ` ```mermaid ` fenced blocks as live SVG diagrams via a vendored
