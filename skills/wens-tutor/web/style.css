@@ -69,6 +69,12 @@ body.resizing-col { cursor: col-resize; user-select: none; }
 #doc img { max-width: 100%; height: auto; }
 mark.ann--blue { background: #b3e0ff; } mark.ann--pink { background: #ffc7e0; }
 
+/* Wikilinks ([[#heading|alias]]) and image embeds (![[file|w]]) — render.js */
+.wikilink { color: #06c; text-decoration: none; cursor: pointer; }
+.wikilink:hover { text-decoration: underline; }
+.wikilink--broken { color: #999; border-block-end: 1px dashed #d33; cursor: default; }
+#doc pre.mermaid svg { max-width: 100%; height: auto; }
+
 /* In-flight attempt card: link + delete button side by side */
 .card.in-flight { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
 .card.in-flight button { min-height: var(--hit); flex-shrink: 0; }

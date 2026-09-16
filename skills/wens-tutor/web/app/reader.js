@@ -54,7 +54,7 @@ async function load() {
   document.getElementById("title").textContent = meta.title;
   document.getElementById("keys").textContent = `${S.keys.esc}　l ${S.reader.highlight}/${S.reader.clear}`;
   const source = await (await fetch(`/raw/${encodeURIComponent(relpath)}`)).text();
-  render.renderInto(doc, source);
+  await render.renderInto(doc, source);
   tables.enhanceTables(doc, relpath);
   hideAnswers();
   hideExplanations();
@@ -66,6 +66,8 @@ async function load() {
   btnReveal.textContent = hiddenBlocks.some((el) => el.classList.contains("answer-hidden"))
     ? S.reader.showAll : S.reader.hideAll;
   buildToc();
+  wireWikilinks();
+  wireEmbeds();
   await restoreAnnotations();
   jumpToTarget();
   // Restore saved scroll position when not arriving via lookup params
@@ -90,6 +92,40 @@ function buildToc() {
     });
     row.append(link);
     toc.append(row);
+  }
+}
+
+/** `[[#heading|alias]]` → jump to the Section whose title matches exactly
+ * (tutorlib/parser.py stores the raw heading text as Section.title). No
+ * match: leave it a visibly inert broken link rather than silently plain
+ * text or a dead click. */
+function wireWikilinks() {
+  for (const a of doc.querySelectorAll("a.wikilink")) {
+    const sec = meta.sections.find((s) => s.title === a.dataset.target);
+    if (sec) {
+      a.href = "#";
+      a.addEventListener("click", (e) => { e.preventDefault(); scrollToLine(sec.line_start); });
+    } else {
+      a.classList.add("wikilink--broken");
+      a.title = `找不到對應章節：${a.dataset.target}`;
+    }
+  }
+}
+
+/** `![[file.png|width]]` embeds a sibling file, resolved relative to this
+ * Material File's own directory. A 404 (renamed/missing asset) swaps in the
+ * same visibly-broken treatment as an unresolved wikilink. */
+function wireEmbeds() {
+  const dir = relpath.includes("/") ? relpath.slice(0, relpath.lastIndexOf("/") + 1) : "";
+  for (const img of doc.querySelectorAll("img.embed")) {
+    img.addEventListener("error", () => {
+      const span = document.createElement("span");
+      span.className = "wikilink--broken";
+      span.title = `找不到圖片：${img.dataset.embed}`;
+      span.textContent = `〔圖片遺失：${img.dataset.embed}〕`;
+      img.replaceWith(span);
+    }, { once: true });
+    img.src = `/raw/${encodeURIComponent(dir + img.dataset.embed)}`;
   }
 }
 

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-09-16 — feat(wens-tutor): mermaid flowcharts, wikilinks, and image embeds in Course prose
+
+- `render.js` now renders ` ```mermaid ` fenced blocks as live SVG diagrams via a vendored
+  `mermaid.min.js` (reader page only), resolves Obsidian `[[#heading|alias]]` wikilinks by
+  exact `Section.title` match, and resolves `![[file|width]]` image embeds relative to the
+  Material File's own directory — all extracted via placeholder tokens before `markdown-it`
+  parses, the same technique already used for `$…$` LaTeX math, since a raw `|` inside either
+  construct would otherwise be misread as a table-cell delimiter
+- Unresolved wikilink targets and missing embedded images render as a visibly broken link
+  (dashed underline, same treatment as an Orphan Annotation) instead of silent plain text or
+  a browser broken-image icon
+- Fixed `server.py`'s `/raw/` handler, which previously rejected every non-`.md` path
+  outright (`safe_material_path` now takes an extension allow-list) and always served
+  `text/markdown` regardless of the actual file — images could not be served at all before
+  this fix
+- Verified against the real corpus file that motivated this work (`筆記.md`, 機器學習): 1
+  mermaid diagram → 1 SVG, 54/54 wikilinks resolved, 1 image embed served with the correct
+  `image/png` content-type and no console errors; `tests/` suite unaffected (10 pre-existing
+  unrelated failures confirmed present before this change via `git stash`)
+- New `docs/adr/0015-mermaid-wikilinks-and-image-embeds-in-course-prose.md`
+
 ### 2026-09-07 — feat(yt-channel-dl): video download support with startup type confirmation
 
 - Added `--type audio|video` to `download_channel.py` — video mode fetches `bestvideo+bestaudio`

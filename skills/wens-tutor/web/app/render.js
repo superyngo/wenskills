@@ -10,6 +10,52 @@ for (const rule of ["paragraph_open", "heading_open", "table_open", "blockquote_
   md.renderer.rules[rule] = stamp;
 }
 
+if (window.mermaid) window.mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+
+/** Fence rule: render ```mermaid blocks as a container mermaid.run() fills in;
+ * every other fence language keeps markdown-it's default <pre><code> output. */
+const defaultFence = md.renderer.rules.fence
+  || ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options, env));
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const t = tokens[idx];
+  if (t.info.trim() === "mermaid") {
+    return `<pre class="mermaid">${md.utils.escapeHtml(t.content)}</pre>`;
+  }
+  return defaultFence(tokens, idx, options, env, self);
+};
+
+/** Placeholder delimiters for `[[#heading|alias]]` wikilinks and `![[file|width]]`
+ * embeds — extracted before markdown-it for the same reason as math: a `|`
+ * inside either construct would otherwise be read as a table-cell delimiter. */
+const REF_OPEN = "\uE002", REF_CLOSE = "\uE003";
+
+function extractRefs(source) {
+  const store = [];
+  const push = (entry) => `${REF_OPEN}${store.push(entry) - 1}${REF_CLOSE}`;
+  let out = source.replace(/!\[\[([^|\]]+)(?:\|(\d+))?\]\]/g,
+    (_, file, width) => push({ kind: "embed", file: file.trim(), width }));
+  out = out.replace(/\[\[#([^|\]]+)(?:\|([^\]]+))?\]\]/g,
+    (_, target, alias) => push({ kind: "wikilink", target: target.trim(), alias: (alias || target).trim() }));
+  return { text: out, store };
+}
+
+/** Replace placeholder tokens with unresolved <a>/<img> markup — resolving
+ * a wikilink target or an embed's file path needs the caller's section list
+ * and file path, neither of which this module has (it also renders Question
+ * stems, which carry no sections). The caller wires resolution afterward. */
+function substituteRefs(html, store) {
+  if (!store.length) return html;
+  const re = new RegExp(`${REF_OPEN}(\\d+)${REF_CLOSE}`, "g");
+  return html.replace(re, (_, idx) => {
+    const entry = store[Number(idx)];
+    if (entry.kind === "wikilink") {
+      return `<a class="wikilink" data-target="${md.utils.escapeHtml(entry.target)}">${md.utils.escapeHtml(entry.alias)}</a>`;
+    }
+    const width = entry.width ? ` width="${Number(entry.width)}"` : "";
+    return `<img class="embed" data-embed="${md.utils.escapeHtml(entry.file)}"${width} alt="${md.utils.escapeHtml(entry.file)}">`;
+  });
+}
+
 /** Placeholder delimiters: Unicode Private-Use-Area chars markdown-it never
  * treats specially, so math spans survive inline parsing (bold/underscore/
  * pipe-in-tables) untouched until substituted back into the rendered HTML. */
@@ -51,9 +97,14 @@ function substituteMath(html, store) {
   });
 }
 
-export function renderInto(el, source) {
-  const { text, store } = extractMath(source);
-  el.innerHTML = substituteMath(md.render(text), store);
+export async function renderInto(el, source) {
+  const refs = extractRefs(source);
+  const { text, store } = extractMath(refs.text);
+  el.innerHTML = substituteRefs(substituteMath(md.render(text), store), refs.store);
+  if (window.mermaid) {
+    const nodes = el.querySelectorAll("pre.mermaid");
+    if (nodes.length) await window.mermaid.run({ nodes });
+  }
   return el;
 }
 

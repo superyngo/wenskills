@@ -17,10 +17,13 @@ WEB = Path(__file__).resolve().parents[2] / "web"
 PAGES = {"/": "index.html", "/reader": "reader.html", "/exam": "exam.html", "/stats": "stats.html"}
 
 
-def safe_material_path(root, relpath: str):
+ASSET_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
+
+
+def safe_material_path(root, relpath: str, exts=(".md",)):
     root = Path(root).resolve()
     rel = urllib.parse.unquote(relpath or "")
-    if rel.startswith("/") or not rel.endswith(".md"):
+    if rel.startswith("/") or not rel.lower().endswith(exts):
         return None
     candidate = (root / rel)
     if candidate.is_symlink():
@@ -74,10 +77,14 @@ def make_handler(root, conn, lock):
                 return self._json(code, payload)
 
             if path.startswith("/raw/"):
-                p = safe_material_path(root, path[len("/raw/"):])
+                rel = path[len("/raw/"):]
+                p = safe_material_path(root, rel, exts=(".md",) + ASSET_EXTS)
                 if not p:
                     return self._send(404, b"not found", "text/plain; charset=utf-8")
-                return self._send(200, p.read_bytes(), "text/markdown; charset=utf-8")
+                if p.suffix.lower() == ".md":
+                    return self._send(200, p.read_bytes(), "text/markdown; charset=utf-8")
+                ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+                return self._send(200, p.read_bytes(), ctype)
 
             name = PAGES.get(path)
             p = safe_web_path(name) if name else safe_web_path(path.lstrip("/"))
