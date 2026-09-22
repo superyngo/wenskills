@@ -67,7 +67,7 @@ async function load() {
     ? S.reader.showAll : S.reader.hideAll;
   buildToc();
   wireWikilinks();
-  wireEmbeds();
+  await wireEmbeds();
   await restoreAnnotations();
   jumpToTarget();
   // Restore saved scroll position when not arriving via lookup params
@@ -114,9 +114,12 @@ function wireWikilinks() {
 
 /** `![[file.png|width]]` embeds a sibling file, resolved relative to this
  * Material File's own directory. A 404 (renamed/missing asset) swaps in the
- * same visibly-broken treatment as an unresolved wikilink. */
-function wireEmbeds() {
+ * same visibly-broken treatment as an unresolved wikilink. Awaited by the
+ * caller: an image that finishes loading after a jump reflows the document
+ * and drags the jump target off-screen. */
+async function wireEmbeds() {
   const dir = relpath.includes("/") ? relpath.slice(0, relpath.lastIndexOf("/") + 1) : "";
+  const pending = [];
   for (const img of doc.querySelectorAll("img.embed")) {
     img.addEventListener("error", () => {
       const span = document.createElement("span");
@@ -126,7 +129,9 @@ function wireEmbeds() {
       img.replaceWith(span);
     }, { once: true });
     img.src = `/raw/${encodeURIComponent(dir + img.dataset.embed)}`;
+    pending.push(img.decode().catch(() => {}));
   }
+  await Promise.all(pending);
 }
 
 function scrollToLine(line) {

@@ -49,6 +49,9 @@ footer.keys { position: sticky; bottom: 0; padding: .4rem var(--gap); border-top
 .focus { outline: 3px solid #0b5; outline-offset: 2px; }
 mark.ann--yellow { background: #fff3a3; } mark.ann--green { background: #b9f6c1; }
 #doc { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+/* Fixed header overlays the viewport top, so scrollIntoView({block:"start"})
+   would land the jump target underneath it. */
+#doc [data-line] { scroll-margin-top: calc(var(--header-h) + .5rem); }
 #doc pre, #doc table { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
 #doc table { table-layout: fixed; }
 #doc th, #doc td { overflow: hidden; text-overflow: ellipsis; padding: .3rem .6rem; }
