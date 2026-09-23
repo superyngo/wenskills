@@ -59,8 +59,10 @@ async function load() {
   hideAnswers();
   hideExplanations();
   const btnReveal = document.getElementById("reveal-toggle");
-  for (const i of JSON.parse(localStorage.getItem(`reveal:${relpath}`) || "[]")) {
-    if (hiddenBlocks[i]) setBlock(hiddenBlocks[i], true);
+  const savedReveals = localStorage.getItem(`reveal:${relpath}`);
+  if (savedReveals !== null) {
+    const shown = new Set(JSON.parse(savedReveals));
+    hiddenBlocks.forEach((el, i) => setBlock(el, shown.has(i)));
   }
   btnReveal.hidden = hiddenBlocks.length === 0;
   btnReveal.textContent = hiddenBlocks.some((el) => el.classList.contains("answer-hidden"))
@@ -85,7 +87,7 @@ function buildToc() {
     row.style.paddingInlineStart = `${(s.level - 1) * 0.75}rem`;
     const link = document.createElement("a");
     link.href = `#L${s.line_start}`;
-    link.textContent = s.title;
+    link.textContent = s.title.replace(new RegExp(render.SAFE_TAG.source.slice(1), "gi"), "");
     link.addEventListener("click", (e) => {
       e.preventDefault();
       scrollToLine(s.line_start);
@@ -106,7 +108,7 @@ function wireWikilinks() {
     const h = heads.find((el) => el.textContent.trim() === a.dataset.target);
     if (h) {
       a.href = "#";
-      a.addEventListener("click", (e) => { e.preventDefault(); h.scrollIntoView({ block: "start" }); });
+      a.addEventListener("click", (e) => { e.preventDefault(); revealAround(h); h.scrollIntoView({ block: "start" }); });
     } else {
       a.classList.add("wikilink--broken");
       a.title = `找不到對應章節：${a.dataset.target}`;
@@ -146,9 +148,16 @@ function scrollToLine(line) {
 function jumpToAnnotation(annId) {
   const mark = doc.querySelector(`mark.ann[data-ann-id="${annId}"]`);
   if (!mark) return;
+  revealAround(mark);
   mark.scrollIntoView({ behavior: "smooth", block: "center" });
   mark.classList.add("flash");
   setTimeout(() => mark.classList.remove("flash"), 1500);
+}
+
+/** A jump target inside a hidden answer/callout is shown first (not saved). */
+function revealAround(el) {
+  const blk = el.closest(".answer-hidden");
+  if (blk) setBlock(blk, true);
 }
 
 const hiddenBlocks = []; // answer/explanation blocks eligible for page-wide toggle
@@ -181,9 +190,20 @@ function saveReveals() {
   localStorage.setItem(`reveal:${relpath}`, JSON.stringify(
     hiddenBlocks.map((el, i) => (el.classList.contains("answer-shown") ? i : -1)).filter((i) => i >= 0)));
 }
+/** Answer paragraphs and foldable Obsidian callouts (`> [!type]-`/`+`), in
+ * document order so saved reveal indices stay stable. A callout hides whole,
+ * title included; `+` starts shown. Paragraphs inside a callout are left alone. */
 function hideAnswers() {
-  for (const p of doc.querySelectorAll("p")) {
-    if (/答案[：:]/.test(p.textContent)) makeToggle(p, S.reader.revealAnswer, S.reader.hideAnswer);
+  for (const el of doc.querySelectorAll("p, .callout")) {
+    if (el.classList.contains("callout")) {
+      if (!el.dataset.fold) continue;
+      const isAnswer = /答案/.test(el.querySelector(".callout-title").textContent);
+      makeToggle(el, isAnswer ? S.reader.revealAnswer : S.reader.revealExplanation,
+        isAnswer ? S.reader.hideAnswer : S.reader.hideExplanation);
+      if (el.dataset.fold === "+") setBlock(el, true);
+    } else if (!el.closest(".callout") && /答案[：:]/.test(el.textContent)) {
+      makeToggle(el, S.reader.revealAnswer, S.reader.hideAnswer);
+    }
   }
 }
 
@@ -192,7 +212,7 @@ function hideAnswers() {
  * both stay hidden and reveal together on a single click — same UX as an answer. */
 function hideExplanations() {
   for (const p of doc.querySelectorAll("p")) {
-    if (!/^解析[：:（(]/.test(p.textContent.trim())) continue;
+    if (p.closest(".callout") || !/^解析[：:（(]/.test(p.textContent.trim())) continue;
     const wrap = document.createElement("div");
     p.before(wrap);
     wrap.append(p);
@@ -380,7 +400,7 @@ function jumpToTarget() {
   }
   if (term) {
     for (const b of render.blocks(doc)) {
-      if (b.textContent.includes(term)) { b.classList.add("focus"); b.scrollIntoView({ block: "center" }); break; }
+      if (b.textContent.includes(term)) { revealAround(b); b.classList.add("focus"); b.scrollIntoView({ block: "center" }); break; }
     }
   }
 }
@@ -403,7 +423,7 @@ btnReveal.addEventListener("click", () => {
   const show = hiddenBlocks.some((el) => el.classList.contains("answer-hidden"));
   for (const el of hiddenBlocks) setBlock(el, show);
   btnReveal.textContent = show ? S.reader.hideAll : S.reader.showAll;
-  if (show) saveReveals(); else localStorage.removeItem(`reveal:${relpath}`); // hide-all = reset
+  saveReveals();
 });
 
 // Save scroll position (debounced) for restore on next load

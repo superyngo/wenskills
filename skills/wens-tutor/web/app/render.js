@@ -10,6 +10,52 @@ for (const rule of ["paragraph_open", "heading_open", "table_open", "blockquote_
   md.renderer.rules[rule] = stamp;
 }
 
+/** Raw-HTML whitelist: html stays off, but a handful of attribute-free
+ * formatting tags Obsidian notes use (`<small>`, `<br/>` in table cells) pass
+ * through. Anything else is still escaped as text. */
+export const SAFE_TAG = /^<(\/?)(small|br|sub|sup|kbd|mark|u)\s*\/?>/i;
+md.inline.ruler.after("autolink", "safe_tag", (state, silent) => {
+  if (state.src.charCodeAt(state.pos) !== 0x3C) return false;
+  const m = SAFE_TAG.exec(state.src.slice(state.pos));
+  if (!m) return false;
+  if (!silent) {
+    const name = m[2].toLowerCase();
+    state.push("html_inline", "", 0).content = name === "br" ? "<br>" : `<${m[1]}${name}>`;
+  }
+  state.pos += m[0].length;
+  return true;
+});
+
+/** Obsidian callouts: a blockquote whose first line is `[!type]` (optional
+ * `-`/`+` fold marker, optional title) renders as div.callout. Runs before
+ * inline parsing so the marker line is stripped from the paragraph source. */
+md.core.ruler.after("block", "callout", (state) => {
+  const toks = state.tokens;
+  for (let i = 0; i < toks.length; i++) {
+    if (toks[i].type !== "blockquote_open" || toks[i + 1]?.type !== "paragraph_open") continue;
+    const inline = toks[i + 2];
+    const m = /^\[!(\w+)\]([-+]?)[ \t]*(.*)(?:\n|$)/.exec(inline.content);
+    if (!m) continue;
+    let j = i + 1;
+    while (!(toks[j].type === "blockquote_close" && toks[j].level === toks[i].level)) j++;
+    toks[i].meta = { callout: m[1].toLowerCase(), fold: m[2], title: m[3] };
+    toks[j].meta = { callout: true };
+    inline.content = inline.content.slice(m[0].length);
+    if (!inline.content.trim()) { toks[i + 1].hidden = true; toks[i + 3].hidden = true; }
+  }
+});
+md.renderer.rules.blockquote_open = (tokens, idx, options, env, self) => {
+  const t = tokens[idx];
+  if (!t.meta?.callout) return stamp(tokens, idx, options, env, self);
+  const { callout, fold, title } = t.meta;
+  const line = t.map ? ` data-line="${t.map[0] + 1}"` : "";
+  const head = title ? md.renderInline(title, env) : md.utils.escapeHtml(callout);
+  return `<div class="callout callout-${callout}" data-fold="${fold}"${line}>`
+    + `<div class="callout-title">${head}</div><div class="callout-content">\n`;
+};
+md.renderer.rules.blockquote_close = (tokens, idx, options, env, self) =>
+  tokens[idx].meta?.callout ? "</div></div>\n" : self.renderToken(tokens, idx, options);
+
 if (window.mermaid) window.mermaid.initialize({ startOnLoad: false, theme: "neutral" });
 
 /** Fence rule: render ```mermaid blocks as a container mermaid.run() fills in;

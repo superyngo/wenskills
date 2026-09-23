@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-09-23 — fix(wens-tutor): render `<small>`/`<br>` and hide Obsidian answer callouts
+
+- `render.js` keeps `html: false` but allows a whitelist of attribute-free tags
+  (`small br sub sup kbd mark u`). The TOC strips them from heading labels
+- `> [!type]-/+ title` blockquotes render as `div.callout` (title + content, coloured by type).
+  Foldable callouts join the existing answer/explanation hide toggle as whole blocks, title
+  included: `-` starts hidden, `+` starts shown. State persists in `reveal:<file>`. Before this,
+  the answer paragraph got a button, but its plain text stayed visible
+- "Hide all" now saves the empty state instead of deleting the key, so `+` callouts stay hidden.
+  Jumping to an annotation, lookup hit, or wikilink inside a hidden block reveals it
+- Verified on the real root: 131/145 callouts in 題庫 科目1/3 start hidden; reveal persists across
+  reload; show/hide-all works; 11 table `<br>` render in AI應用規劃師/筆記.md
+
 ### 2026-09-23 — fix(wens-tutor): wikilinks follow live Markdown; serve survives near-duplicate files
 
 - Wikilinks `[[#標題]]` now jump to the heading on screen, found by exact text match, the same

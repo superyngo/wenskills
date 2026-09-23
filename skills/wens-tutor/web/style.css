@@ -106,6 +106,15 @@ mark.ann--blue { background: #b3e0ff; } mark.ann--pink { background: #ffc7e0; }
 .answer-shown .reveal-btn { float: inline-end; }
 .answer-shown { border-inline-start: 3px solid #0b5; padding-inline-start: .5rem; }
 
+/* Obsidian callouts (> [!type]) */
+.callout { border-inline-start: 4px solid #888; background: #f6f6f6; border-radius: .25rem; padding: .4rem .75rem; margin: .75rem 0; }
+.callout-title { font-weight: 600; }
+.callout-content > :last-child { margin-bottom: 0; }
+.callout-success, .callout-check, .callout-done { border-inline-start-color: #0b5; background: #eefaf2; }
+.callout-note, .callout-info, .callout-tip { border-inline-start-color: #27c; background: #eef4fc; }
+.callout-warning, .callout-caution, .callout-question { border-inline-start-color: #e80; background: #fdf5ea; }
+.callout-danger, .callout-error, .callout-bug, .callout-failure { border-inline-start-color: #d33; background: #fcefef; }
+
 /* Annotation panel: clickable rows and mark flash */
 .ann-row { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; padding: .3rem 0; border-bottom: 1px solid #eee; }
 .ann-row > a { color: #06c; text-decoration: none; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
