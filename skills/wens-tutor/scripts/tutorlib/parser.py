@@ -27,7 +27,17 @@ def slugify(text: str) -> str:
 def parse_sections(md: str) -> List[Section]:
     lines = md.splitlines()
     heads = []  # (index, level, title)
+    fence = None  # the opening ``` / ~~~ run while inside a fenced block
     for i, line in enumerate(lines):
+        f = re.match(r"^\s{0,3}(`{3,}|~{3,})", line)
+        if f:
+            if fence is None:
+                fence = f.group(1)
+            elif f.group(1)[0] == fence[0] and len(f.group(1)) >= len(fence):
+                fence = None
+            continue
+        if fence is not None:
+            continue
         m = HEADING.match(line)
         if m:
             heads.append((i, len(m.group(1)), m.group(2).strip()))

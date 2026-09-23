@@ -68,6 +68,8 @@ def open_root(root: Path) -> sqlite3.Connection:
 
     known = {r["relpath"]: dict(r) for r in conn.execute("SELECT * FROM file_id")}
     seen_relpaths = set()
+    # A known relpath still on disk was not renamed; it must never donate its fid.
+    present = {str(p.relative_to(root)) for p in catalog.material_files(root)}
 
     def fid_for(rel, sections, banks):
         seen_relpaths.add(rel)
@@ -79,7 +81,8 @@ def open_root(root: Path) -> sqlite3.Connection:
         candidates = [
             r
             for r in known.values()
-            if r["relpath"] not in seen_relpaths and _jaccard(r["fingerprint"] or "[]", fp) >= 0.6
+            if r["relpath"] not in seen_relpaths and r["relpath"] not in present
+            and _jaccard(r["fingerprint"] or "[]", fp) >= 0.6
         ]
         if len(candidates) == 1:
             fid = candidates[0]["fid"]

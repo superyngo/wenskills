@@ -73,7 +73,7 @@ def make_handler(root, conn, lock):
                 length = int(self.headers.get("Content-Length") or 0)
                 body = json.loads(self.rfile.read(length) or "null") if length else None
                 with lock:
-                    code, payload = api.handle(conn, self.command, path, query, body)
+                    code, payload = api.handle(conn, self.command, path, query, body, root=root)
                 return self._json(code, payload)
 
             if path.startswith("/raw/"):

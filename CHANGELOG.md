@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-09-23 — fix(wens-tutor): wikilinks follow live Markdown; serve survives near-duplicate files
+
+- Wikilinks `[[#標題]]` now jump to the heading on screen, found by exact text match, the same
+  way Obsidian resolves them. Before, they used the catalogue's line numbers, which only get
+  parsed when the server starts, so after an edit they pointed at old lines
+- `/api/file` now parses the file's Sections fresh on every request, so the TOC stays aligned
+  with `/raw`
+- Fixed `serve` crashing with `UNIQUE constraint failed: file.fid`: a new near-copy of an
+  existing file was treated as that file renamed and took its fid. A known relpath that
+  still exists on disk no longer counts as a rename source
+- Material scanning now skips `docs/tmp/` (agent scratch space)
+- `parse_sections` now ignores `#` lines inside ``` / ~~~ code fences (機器學習/筆記.md: 190 → 158
+  Sections, the same count markdown-it produces)
+- Verified on the real Materials Root: `serve` starts, and all 5 links to `#降維技術補充：SVD 與 LDA`
+  land on the heading at line 431. 11 `tests/` failures already existed before this change
+  (hard-coded corpus counts that went stale) and are unrelated
+
 ### 2026-09-16 — feat(wens-tutor): click-to-zoom on Course images
 
 - `reader.js` adds a delegated click handler on `#doc`: clicking any image opens a fixed

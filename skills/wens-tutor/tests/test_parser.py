@@ -47,6 +47,10 @@ class TestSections(unittest.TestCase):
         self.assertFalse(secs["第三章-ai-相關技術應用"].is_leaf)
         self.assertTrue(secs["第三章-ai-相關技術應用/3-1-自然語言處理/選擇題"].is_leaf)
 
+    def test_hash_lines_inside_code_fences_are_not_headings(self):
+        md = "# 標題\n\n```python\n# 註解\n## 也是註解\n```\n\n~~~\n# x\n~~~\n\n## 小節\n"
+        self.assertEqual([s.title for s in parser.parse_sections(md)], ["標題", "小節"])
+
 
 ROOT = Path("~/repos/wenswiki/wenswiki/work/平台/2026_AI應用規劃師").expanduser()
 

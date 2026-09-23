@@ -95,16 +95,18 @@ function buildToc() {
   }
 }
 
-/** `[[#heading|alias]]` → jump to the Section whose title matches exactly
- * (tutorlib/parser.py stores the raw heading text as Section.title). No
+/** `[[#heading|alias]]` → jump to the rendered heading whose text matches
+ * exactly, as Obsidian does. Resolving against the DOM (not meta.sections)
+ * keeps the target in lockstep with the Markdown actually on screen. No
  * match: leave it a visibly inert broken link rather than silently plain
  * text or a dead click. */
 function wireWikilinks() {
+  const heads = Array.from(doc.querySelectorAll("h1, h2, h3, h4, h5, h6"));
   for (const a of doc.querySelectorAll("a.wikilink")) {
-    const sec = meta.sections.find((s) => s.title === a.dataset.target);
-    if (sec) {
+    const h = heads.find((el) => el.textContent.trim() === a.dataset.target);
+    if (h) {
       a.href = "#";
-      a.addEventListener("click", (e) => { e.preventDefault(); scrollToLine(sec.line_start); });
+      a.addEventListener("click", (e) => { e.preventDefault(); h.scrollIntoView({ block: "start" }); });
     } else {
       a.classList.add("wikilink--broken");
       a.title = `找不到對應章節：${a.dataset.target}`;

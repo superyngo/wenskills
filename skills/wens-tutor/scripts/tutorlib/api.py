@@ -7,7 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import compose, registry
+from . import compose, parser, registry
 
 ANN_ID = re.compile(r"^/api/annotation/(\d+)$")
 ATT_ANSWER = re.compile(r"^/api/attempt/(\d+)/answer$")
@@ -94,7 +94,7 @@ def _wrong_detail(conn, attempt_id, qkeys):
     return out
 
 
-def handle(conn, method, path, query, body):
+def handle(conn, method, path, query, body, root=None):
     if path == "/api/portal" and method == "GET":
         subjects = {}
         for f in conn.execute("SELECT * FROM cat.file ORDER BY relpath"):
@@ -162,6 +162,15 @@ def handle(conn, method, path, query, body):
             "SELECT path, level, title, is_leaf, line_start FROM cat.section WHERE fid=? ORDER BY line_start",
             (f["fid"],),
         )]
+        # The catalogue is parsed once at start-up (ADR 0001) while /raw serves the
+        # file live; re-parse so line numbers match the Markdown being rendered.
+        md_path = Path(root) / rel if root else None
+        if md_path and md_path.is_file():
+            secs = [
+                {"path": s.path, "level": s.level, "title": s.title,
+                 "is_leaf": int(s.is_leaf), "line_start": s.line_start}
+                for s in parser.parse_sections(md_path.read_text(encoding="utf-8"))
+            ]
         read = {r["path"] for r in conn.execute("SELECT path FROM progress WHERE fid=?", (f["fid"],))}
         for s in secs:
             s["read"] = s["path"] in read

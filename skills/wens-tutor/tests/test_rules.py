@@ -96,6 +96,25 @@ class TestFidReconciliation(unittest.TestCase):
         self.assertEqual(conn.execute("SELECT fid FROM cat.file").fetchone()[0], fid)
         conn.close()
 
+    def test_copy_beside_original_does_not_steal_its_fid(self):
+        conn = state.open_root(self.tmp)
+        fid = conn.execute("SELECT fid FROM cat.file").fetchone()[0]
+        conn.close()
+        # Sorts before bank.md and is near-identical: must not be taken for a rename.
+        (self.tmp / "科目A" / "a_copy.md").write_text(self.f.read_text(encoding="utf-8"), encoding="utf-8")
+        conn = state.open_root(self.tmp)
+        rows = dict(conn.execute("SELECT relpath, fid FROM cat.file").fetchall())
+        self.assertEqual(rows[str(Path("科目A") / "bank.md")], fid)
+        self.assertNotEqual(rows[str(Path("科目A") / "a_copy.md")], fid)
+        conn.close()
+
+    def test_docs_tmp_scratch_is_not_material(self):
+        scratch = self.tmp / "科目A" / "docs" / "tmp"
+        scratch.mkdir(parents=True)
+        (scratch / "bank.orig.md").write_text(self.f.read_text(encoding="utf-8"), encoding="utf-8")
+        rels = [str(p.relative_to(self.tmp)) for p in catalog.material_files(self.tmp)]
+        self.assertEqual(rels, [str(Path("科目A") / "bank.md")])
+
     def test_slots_are_recorded_for_every_question(self):
         conn = state.open_root(self.tmp)
         rows = conn.execute("SELECT qkey, ordinal FROM question_slot ORDER BY ordinal").fetchall()

@@ -24,11 +24,18 @@ CREATE INDEX cat.i_q ON question(bkey);
 """
 
 
+def _is_scratch(parts) -> bool:
+    """Agent scratch space (`docs/tmp/…`) is never Course or Bank content."""
+    return any(a == "docs" and b == "tmp" for a, b in zip(parts, parts[1:]))
+
+
 def material_files(root: Path):
     return sorted(
         p
         for p in root.rglob("*.md")
-        if p.name != "README.md" and "source" not in p.relative_to(root).parts
+        if p.name != "README.md"
+        and "source" not in p.relative_to(root).parts
+        and not _is_scratch(p.relative_to(root).parts)
     )
 
 
