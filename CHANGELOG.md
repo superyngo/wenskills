@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-01 — fix(wens-tutor): image embeds fall back to the note's `assets/` folder
+
+- `reader.js` `wireEmbeds()` retries `![[file]]` under `<note dir>/assets/` when the sibling
+  path 404s, before showing 〔圖片遺失〕; the jump-wait now resolves after the final attempt.
+- ADR 0015 updated to record the fallback.
+
 ### 2026-09-23 — fix(wens-tutor): render `<small>`/`<br>` and hide Obsidian answer callouts
 
 - `render.js` keeps `html: false` but allows a whitelist of attribute-free tags

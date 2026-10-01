@@ -27,7 +27,9 @@ which carry neither. `reader.js` (which has `meta.sections` and knows its own `r
 the actual jump target and embed `src` afterward. A wikilink target is matched against
 `Section.title` verbatim — `tutorlib/parser.py` already stores the raw heading text there, so
 no new identity scheme was introduced. An embed path resolves relative to the Material File's
-own directory, matching how the corpus's images sit beside their `.md` file on disk.
+own directory, matching how the corpus's images sit beside their `.md` file on disk; if that
+404s, `reader.js` retries once under that directory's `assets/` subfolder (some notes keep
+images there). Obsidian's vault-wide basename lookup is deliberately not replicated.
 
 **Unresolved targets are visibly broken, not silently swallowed or hard errors** — a
 mistyped wikilink target or a missing/renamed image gets the same dashed-underline treatment

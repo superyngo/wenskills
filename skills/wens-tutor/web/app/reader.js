@@ -117,7 +117,8 @@ function wireWikilinks() {
 }
 
 /** `![[file.png|width]]` embeds a sibling file, resolved relative to this
- * Material File's own directory. A 404 (renamed/missing asset) swaps in the
+ * Material File's own directory, falling back to its `assets/` subdirectory.
+ * A 404 on both (renamed/missing asset) swaps in the
  * same visibly-broken treatment as an unresolved wikilink. Awaited by the
  * caller: an image that finishes loading after a jump reflows the document
  * and drags the jump target off-screen. */
@@ -125,15 +126,22 @@ async function wireEmbeds() {
   const dir = relpath.includes("/") ? relpath.slice(0, relpath.lastIndexOf("/") + 1) : "";
   const pending = [];
   for (const img of doc.querySelectorAll("img.embed")) {
-    img.addEventListener("error", () => {
-      const span = document.createElement("span");
-      span.className = "wikilink--broken";
-      span.title = `找不到圖片：${img.dataset.embed}`;
-      span.textContent = `〔圖片遺失：${img.dataset.embed}〕`;
-      img.replaceWith(span);
-    }, { once: true });
-    img.src = `/raw/${encodeURIComponent(dir + img.dataset.embed)}`;
-    pending.push(img.decode().catch(() => {}));
+    const tries = [dir + img.dataset.embed, dir + "assets/" + img.dataset.embed];
+    pending.push(new Promise((done) => {
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", function onError() {
+        tries.shift();
+        if (tries.length) { img.src = `/raw/${encodeURIComponent(tries[0])}`; return; }
+        img.removeEventListener("error", onError);
+        const span = document.createElement("span");
+        span.className = "wikilink--broken";
+        span.title = `找不到圖片：${img.dataset.embed}`;
+        span.textContent = `〔圖片遺失：${img.dataset.embed}〕`;
+        img.replaceWith(span);
+        done();
+      });
+    }));
+    img.src = `/raw/${encodeURIComponent(tries[0])}`;
   }
   await Promise.all(pending);
 }
