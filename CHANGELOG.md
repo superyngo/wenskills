@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-02 — fix(wens-tutor): highlights inside folded answer callouts no longer shift 7 chars early
+
+- `render.js`: the first paragraph of an Obsidian callout shared `data-line` with the callout `<div>`,
+  so selection offsets (relative to the `<p>`) were applied to the callout (which also holds the
+  reveal button, title and newline). The paragraph is no longer stamped, keeping `data-line` unique.
+- Existing annotations saved with the old offsets re-anchor via the text fallback on reload.
+
 ### 2026-10-01 — fix(wens-tutor): image embeds fall back to the note's `assets/` folder
 
 - `reader.js` `wireEmbeds()` retries `![[file]]` under `<note dir>/assets/` when the sibling

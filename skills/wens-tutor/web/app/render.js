@@ -2,7 +2,7 @@
 const md = window.markdownit({ html: false, linkify: false });
 const stamp = (tokens, idx, options, env, self) => {
   const t = tokens[idx];
-  if (t.map) t.attrSet("data-line", String(t.map[0] + 1));
+  if (t.map && !t.meta?.noStamp) t.attrSet("data-line", String(t.map[0] + 1));
   return self.renderToken(tokens, idx, options, env);
 };
 for (const rule of ["paragraph_open", "heading_open", "table_open", "blockquote_open",
@@ -41,6 +41,7 @@ md.core.ruler.after("block", "callout", (state) => {
     toks[i].meta = { callout: m[1].toLowerCase(), fold: m[2], title: m[3] };
     toks[j].meta = { callout: true };
     inline.content = inline.content.slice(m[0].length);
+    toks[i + 1].meta = { noStamp: true }; // shares the callout's line; keep data-line unique
     if (!inline.content.trim()) { toks[i + 1].hidden = true; toks[i + 3].hidden = true; }
   }
 });
