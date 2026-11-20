@@ -16,7 +16,7 @@ All referenced skills are installed. Don't validate them.
 
 - `subagent-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`
 - `agd` is on `PATH` and configured to allow file writes for `code-implement` / `review-implement` tiers
-- `docs/tmp/` is in `.gitignore`
+- `docs/tmp/*-scratch/` is in `.gitignore` (only the scratch directories, not all of `docs/tmp/`)
 
 ## Workflow
 
@@ -60,7 +60,7 @@ digraph wens_impl {
 
 ## Dispatch Recipes
 
-`scripts/dispatch.sh` lives next to this file. Use these recipes verbatim.
+`scripts/dispatch.sh` lives next to this file. Use these recipes verbatim. Output lands in `docs/tmp/claude-scratch/YYYY-MM-DD-<slug>/`; add `--slug <plan kebab title>` to any recipe to keep one plan's dispatches in one directory (`--agent <name>` changes the `claude-scratch` part).
 
 ### Implement a task
 
@@ -141,7 +141,7 @@ Only escalate back to `agd` (via `--template review-implement`) if fixes balloon
 
 ## Read the YAML Frontmatter
 
-Every dispatch output (`docs/tmp/<ts>-<template>.out.md`) starts with a YAML block:
+Every dispatch output (`docs/tmp/<agent>-scratch/YYYY-MM-DD-<slug>/<ts>-<template>.out.md`) starts with a YAML block:
 
 - `code-implement` / `review-implement`: `status: COMPLETED | BLOCKED | PARTIAL`
 - `code-review`: `status: PASS | ISSUES_FOUND` + `issues:` list with `severity: blocker | major | minor`

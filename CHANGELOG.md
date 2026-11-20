@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-11-20 — feat(skills): plan and dispatch skills write the repo-docs layout
+
+- `wens-plan-creator`: the spec goes to `docs/spec/YYYY-MM-DD-<kebab-title>.md` and the plan to
+  `docs/plan/YYYY-MM-DD-<kebab-title>.md` (shared title, no `-design`/`-plan` suffix), each with
+  `Status:` on line 2 (`Draft` → `Approved` when the review loop passes; plan `Approved`) and a
+  row in the folder `README.md`. Previously `docs/superpowers/{specs,plans}/`.
+- `dispatch.sh` (identical copies in `agd-dispatch`, `wens-plan-creator`, `wens-plan-implementer`):
+  default prompt/output now go to `docs/tmp/<agent>-scratch/YYYY-MM-DD-<slug>/<ts>-<template>{,.out}.md`
+  instead of flat `docs/tmp/<ts>-…` files. New `--agent <name>` (default `claude`) and
+  `--slug <slug>` (default the template name). `--prompt`/`--out` still override.
+- All three skills now tell users to gitignore only `docs/tmp/*-scratch/`, not all of `docs/tmp/`.
+
 ### 2026-11-20 — docs: adopt the repo-docs layout
 
 - New `CONTEXT.md` (`Profile: dev`), `docs/reference/glossary.md`, `docs/reference/skill-layout.md`

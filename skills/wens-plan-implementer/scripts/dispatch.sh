@@ -4,7 +4,7 @@
 # Usage:
 #   dispatch.sh --template <name> [--var k=v ...] [--skills a,b,c]
 #                [--guidance <text>] [--prompt <path>] [--out <path>]
-#                [--timeout <sec>]
+#                [--agent <name>] [--slug <slug>] [--timeout <sec>]
 #
 # Behavior:
 #   - Loads templates/<name>.md (relative to this script's parent).
@@ -14,20 +14,23 @@
 #     entire SKILLS-BLOCK section is removed from the prompt.
 #   - --guidance: free-text paragraph. Substitutes {{guidance}} and keeps the
 #     <!-- GUIDANCE-BLOCK --> wrapper. If omitted, the block is removed.
-#   - Writes prompt to --prompt (default docs/tmp/<ts>-<name>.md).
+#   - Default output dir: docs/tmp/<agent>-scratch/YYYY-MM-DD-<slug>/
+#     (--agent default "claude"; --slug default the template name).
+#   - Writes prompt to --prompt (default <dir>/<ts>-<name>.md).
 #   - Calls `agd dispatch -f <prompt> --timeout <sec>`, captures stdout+stderr
-#     to --out (default docs/tmp/<ts>-<name>.out.md).
+#     to --out (default <dir>/<ts>-<name>.out.md).
 #   - Emits prompt=, out=, tier=, timeout=, exit= on stderr.
 #   - Exit code mirrors agd; 127 if agd missing, 2 if argv malformed.
 #
-# Paths under docs/tmp/ are gitignored by convention — ensure your repo has it.
+# Gitignore docs/tmp/*-scratch/ (only the scratch dirs, not all of docs/tmp/)
+# in your repo — the script does not check.
 
 set -u
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 TEMPLATE_DIR="$SCRIPT_DIR/../templates"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-TMP_DIR="$REPO_ROOT/docs/tmp"
+TMP_ROOT="$REPO_ROOT/docs/tmp"
 
 TEMPLATE=""
 SKILLS=""
@@ -36,6 +39,8 @@ GUIDANCE_SET=0
 PROMPT_PATH=""
 OUT_PATH=""
 TIMEOUT_OVERRIDE=""
+AGENT="claude"
+TASK_SLUG=""
 
 VARS_FILE=$(mktemp -t agddisp.XXXXXX)
 RENDERED=$(mktemp -t agddisp.XXXXXX)
@@ -43,7 +48,7 @@ TMP_NEXT=$(mktemp -t agddisp.XXXXXX)
 cleanup() { rm -f "$VARS_FILE" "$RENDERED" "$TMP_NEXT"; }
 trap cleanup EXIT
 
-usage() { sed -n '2,21p' "$0" >&2; exit 2; }
+usage() { sed -n '2,26p' "$0" >&2; exit 2; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -63,6 +68,8 @@ while [ $# -gt 0 ]; do
     --prompt)   PROMPT_PATH="${2:-}"; shift 2 ;;
     --out)      OUT_PATH="${2:-}"; shift 2 ;;
     --timeout)  TIMEOUT_OVERRIDE="${2:-}"; shift 2 ;;
+    --agent)    AGENT="${2:-}"; shift 2 ;;
+    --slug)     TASK_SLUG="${2:-}"; shift 2 ;;
     -h|--help)  usage ;;
     *) echo "dispatch.sh: unknown arg '$1'" >&2; usage ;;
   esac
@@ -143,9 +150,11 @@ done < "$VARS_FILE"
 UNRESOLVED=$(grep -oE '\{\{[A-Za-z0-9_]+\}\}' "$RENDERED" | sort -u | tr '\n' ' ')
 [ -n "$UNRESOLVED" ] && echo "dispatch.sh: warning: unresolved placeholders: $UNRESOLVED" >&2
 
-mkdir -p "$TMP_DIR"
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 SLUG=$(printf '%s' "$TEMPLATE" | sed 's/[^A-Za-z0-9._-]/-/g')
+AGENT=$(printf '%s' "${AGENT:-claude}" | sed 's/[^A-Za-z0-9._-]/-/g')
+TASK_SLUG=$(printf '%s' "${TASK_SLUG:-$SLUG}" | sed 's/[^A-Za-z0-9._-]/-/g')
+TMP_DIR="$TMP_ROOT/${AGENT}-scratch/$(date +%Y-%m-%d)-${TASK_SLUG}"
 : "${PROMPT_PATH:=$TMP_DIR/${TS}-${SLUG}.md}"
 : "${OUT_PATH:=$TMP_DIR/${TS}-${SLUG}.out.md}"
 mkdir -p "$(dirname "$PROMPT_PATH")" "$(dirname "$OUT_PATH")"

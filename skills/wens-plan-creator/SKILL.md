@@ -29,7 +29,11 @@ All referenced skills are installed. Don't validate them.
 
 ### Step 1 — Brainstorm
 
-Invoke the `brainstorming` skill and run it to completion. Follow its flow verbatim — clarifying questions, approach exploration, design presentation, write spec to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, commit.
+Invoke the `brainstorming` skill and run it to completion. Follow its flow verbatim — clarifying questions, approach exploration, design presentation, write spec, commit — except for where the spec goes. Override brainstorming's default path and write the spec as a repo-docs working record:
+
+- Path: `docs/spec/YYYY-MM-DD-<kebab-title>.md` — dated the day it is written, no `-design` suffix. The plan in Step 4 reuses `<kebab-title>` so the two pair by name.
+- Line 1 is the H1; line 2 is exactly `Status: Draft`.
+- Add the spec to the `## In progress` list in `docs/spec/README.md` (`- [<file>](<file>) — Draft`) in the same commit. If `docs/spec/README.md` does not exist, create it with an `## In progress` section and a `## Landed` table (`| Date | Document | Status |`).
 
 ### Step 2 — Spec Self-Review (paired with grill-with-docs)
 
@@ -46,24 +50,31 @@ sh skills/wens-plan-creator/scripts/dispatch.sh \
     --template spec-review \
     --var spec_path=<path-to-spec> \
     --var stage="round <N>" \
+    --slug <kebab-title> \
     --skills systematic-debugging,verification-before-completion \
     --guidance "<optional: focus areas, prior-round followups>"
 ```
 
-The script writes the rendered prompt and `agd` output under `docs/tmp/`. Read the `out` file; its YAML frontmatter has `status: PASS | ISSUES_FOUND` and an `issues:` list with `severity: blocker | major | minor`.
+`--slug` (the spec's kebab title) keeps every round in one task directory. The script writes the rendered prompt and `agd` output under `docs/tmp/claude-scratch/YYYY-MM-DD-<kebab-title>/`. Read the `out` file; its YAML frontmatter has `status: PASS | ISSUES_FOUND` and an `issues:` list with `severity: blocker | major | minor`.
 
 **Loop rules:**
 
 - If any `blocker` exists: fix the spec inline (you, in main session — small edits don't need offload), commit, increment `stage`, dispatch again.
-- If no blockers remain: exit the loop and proceed. `major` and `minor` items are advisory at this stage — note them and move on; they can be revisited during planning or implementation.
+- If no blockers remain: set the spec's line 2 to `Status: Approved`, update its row in `docs/spec/README.md`, commit, exit the loop and proceed. `major` and `minor` items are advisory at this stage — note them and move on; they can be revisited during planning or implementation.
 - Pass `--guidance` on follow-up rounds to point the reviewer at "verify R<N-1> blockers only" so each round stays cheap.
 - No round cap — loop until blockers reach zero. If rounds aren't converging (same blocker keeps re-appearing after a fix attempt), surface to the user; that's a structural problem the loop can't resolve.
 
-Ensure `docs/tmp/` is in `.gitignore` before the first dispatch.
+Ensure `docs/tmp/*-scratch/` is in `.gitignore` before the first dispatch — ignore only the scratch directories, not all of `docs/tmp/`.
 
 ### Step 4 — Write the Plan
 
-Invoke `writing-plans` to drive the plan structure. Pair it with `feature-planning` for task decomposition. Output goes to `docs/superpowers/plans/YYYY-MM-DD-<topic>-plan.md` (or whatever `writing-plans` chooses). Commit.
+Invoke `writing-plans` to drive the plan structure. Pair it with `feature-planning` for task decomposition. Override `writing-plans`' default path:
+
+- Path: `docs/plan/YYYY-MM-DD-<kebab-title>.md` — the same `<kebab-title>` as the spec, dated the day the plan is written, no `-plan` suffix.
+- Line 1 is the H1; line 2 is exactly `Status: Approved`.
+- Add the plan to the `## In progress` list in `docs/plan/README.md` in the same commit (create the README as in Step 1 if missing).
+
+Commit.
 
 ### Step 5 — Emit Handoff Prompt
 
@@ -94,6 +105,7 @@ End your turn after printing this block. Do **not** auto-invoke `wens-plan-imple
 | `--template spec-review` | Only template this skill calls |
 | `--var spec_path=<path>` | Required |
 | `--var stage="round N"` | Required, for traceability |
+| `--slug <kebab-title>` | Scratch task directory `docs/tmp/claude-scratch/YYYY-MM-DD-<kebab-title>/` |
 | `--skills a,b,c` | Comma-list reviewer should load |
 | `--guidance <text>` | Per-round focus (e.g. "verify R1 fixes only") |
 
@@ -106,3 +118,4 @@ Default timeout 900s; override with `--timeout <sec>` if the spec is large.
 - Treating `status: ISSUES_FOUND` with only `major`/`minor` items as a reason to keep looping — only blockers gate the loop; majors/minors are advisory.
 - Auto-invoking `wens-plan-implementer` at the end. The handoff prompt is the deliverable; the user starts the next session.
 - Forgetting to commit between rounds — reviewer needs the latest spec on disk.
+- Writing the spec or plan to `docs/superpowers/` or with a `-design` / `-plan` suffix — they go in `docs/spec/` and `docs/plan/` under one shared kebab title, with `Status:` on line 2 and a folder `README.md` row.

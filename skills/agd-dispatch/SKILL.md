@@ -29,7 +29,7 @@ Single script does both: render template, then dispatch.
 ```bash
 sh skills/agd-dispatch/scripts/dispatch.sh \
     --template spec-review \
-    --var spec_path=docs/specs/foo.md \
+    --var spec_path=docs/spec/2026-09-02-foo.md \
     --var stage="round 1" \
     --skills systematic-debugging,verification-before-completion \
     --guidance "Pay special attention to the env-var contract — that's where the prior round failed."
@@ -43,15 +43,17 @@ sh skills/agd-dispatch/scripts/dispatch.sh \
 | `--var k=v` | Substitutes `{{k}}` with `v`. Repeatable. Values must not contain newlines. |
 | `--skills a,b,c` | Comma-list of skills the dispatched agent should load. Keeps the template's `SKILLS-BLOCK`; omit → block removed. |
 | `--guidance <text>` | Free-form paragraph injected at the top of the prompt as caller guidance. Keeps the template's `GUIDANCE-BLOCK`; omit → block removed. |
-| `--prompt <path>` | Where to write the rendered prompt. Default: `docs/tmp/<ts>-<template>.md`. |
-| `--out <path>` | Where to write agd's stdout+stderr. Default: `docs/tmp/<ts>-<template>.out.md`. |
+| `--prompt <path>` | Where to write the rendered prompt. Default: `<scratch>/<ts>-<template>.md`. |
+| `--out <path>` | Where to write agd's stdout+stderr. Default: `<scratch>/<ts>-<template>.out.md`. |
+| `--agent <name>` | Names the scratch area: `docs/tmp/<name>-scratch/`. Default: `claude`. |
+| `--slug <slug>` | Names the task directory: `<scratch>` is `docs/tmp/<agent>-scratch/YYYY-MM-DD-<slug>/`. Default: the template name. Pass the same slug (e.g. the spec's kebab title) to keep one task's rounds together. |
 | `--timeout <sec>` | Overrides the template's default tier timeout. |
 
 Tier defaults: `spec-review` 900s · `code-review` 900s · `code-implement` 1800s · `review-implement` 1800s.
 
 Unresolved `{{placeholders}}` are left in the file and warned to stderr. Emits `prompt=`, `out=`, `tier=`, `timeout=`, `exit=` on stderr. Exit code mirrors `agd` (127 if `agd` missing, 2 if argv malformed).
 
-Ensure `docs/tmp/` is in `.gitignore` before first use — the script does not check.
+Ensure `docs/tmp/*-scratch/` is in `.gitignore` before first use — ignore only the scratch directories, not all of `docs/tmp/`. The script does not check.
 
 ## Per-template `--var` parameters
 
@@ -77,7 +79,7 @@ Pass each placeholder via `--var key=value`. Any omitted variable stays as `{{na
 
 **`review-implement`**
 - `repo_root` — absolute repo path
-- `review_report_path` — path to the review output (e.g. an earlier `docs/tmp/*.out.md`)
+- `review_report_path` — path to the review output (e.g. an earlier `docs/tmp/<agent>-scratch/YYYY-MM-DD-<slug>/*.out.md`)
 - `spec_path` — optional, for context
 - `stage` — short label
 
