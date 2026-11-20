@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-11-20 — chore: sweep docs/tmp scratch
+
+- Archived stale `docs/tmp/` scratch (the superseded `using-wens-superpowers` spec-review pair
+  from 2026-05-19, `agent-scratch/`, and `claude-scratch/`) into `docs/tmp/archive/2026-11.tar.gz`;
+  originals moved to OS trash. The spec review's blockers (Skill-tool auto-chaining, `sed`
+  templating, missing timeouts) are moot — `docs/spec/2026-05-19-using-wens-superpowers.md` is
+  `Status: Superseded by ../../skills/wens-plan-creator/SKILL.md`, and the shipped
+  `dispatch.sh` (c72d4af) already uses `awk` substitution and per-tier timeouts. No open
+  BACKLOG item surfaced.
+
 ### 2026-11-20 — feat(skills): plan and dispatch skills write the repo-docs layout
 
 - `wens-plan-creator`: the spec goes to `docs/spec/YYYY-MM-DD-<kebab-title>.md` and the plan to
