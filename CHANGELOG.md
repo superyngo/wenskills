@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-11-20 — docs: adopt the repo-docs layout
+
+- New `CONTEXT.md` (`Profile: dev`), `docs/reference/glossary.md`, `docs/reference/skill-layout.md`
+  (skill structure and list, moved out of `CLAUDE.md`), and `README.md` indexes for
+  `docs/{reference,adr,spec,plan,debug,audit,memo}/`.
+- Moved `docs/superpowers/specs/*-design.md` → `docs/spec/` (dropping `-design` so specs pair with
+  plans by name) and `docs/superpowers/plans/*`, `docs/plans/*` → `docs/plan/`; every record now
+  has `Status:` on line 2 (dates from the landing commits). Path citations in this changelog and
+  inside the moved records repaired.
+- `docs/plan/BACKLOG.md` with two re-verified open items from scratch notes: 11 `wens-tutor`
+  corpus tests with hard-coded counts fail; plain-text `答案：X` paragraphs cannot be hidden.
+- ADR 0001: `skills/yt-channel-dl/SKILL.md` stays in Chinese. ADR 0002: skill-local docs
+  (`skills/wens-tutor/CONTEXT.md`, `docs/adr/`) stay in the skill; added
+  `skills/wens-tutor/docs/adr/README.md` status table.
+- `CLAUDE.md` and `.github/copilot-instructions.md` cut to conduct plus a `CONTEXT.md` pointer
+  (dropped stale `dev-prompt`/`push-update`/`.skill` bundle text); `README.md` links the docs.
+- `.gitignore`: `docs/tmp/` → `docs/tmp/*-scratch/`.
+
 ### 2026-10-02 — fix(wens-tutor): highlights inside folded answer callouts no longer shift 7 chars early
 
 - `render.js`: the first paragraph of an Obsidian callout shared `data-line` with the callout `<div>`,
@@ -225,11 +243,11 @@ defects surfaced; three needed new decisions, and the ground truth itself was wr
   address the page is not a secure origin, so a service worker cannot register and Chrome's install
   prompt will not appear regardless; the original decision is now moot rather than merely
   deliberate.
-- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Touch hosts moved from out-of-scope to
+- `docs/spec/2026-08-13-wens-tutor.md`: Touch hosts moved from out-of-scope to
   in-scope; new "Hosts and access" section (bind/token/trust boundary/HTTPS delegation); the layout
   paragraph replaced by a per-host behaviour table; requirement 3.4's "新視窗開啟" now honoured per
   host; `serve --bind` documented; phone smoke steps added to Verification.
-- `docs/superpowers/plans/2026-08-13-wens-tutor.md`: New — 17-task TDD implementation plan covering
+- `docs/plan/2026-08-13-wens-tutor.md`: New — 17-task TDD implementation plan covering
   the parser (both Bank shapes), the in-memory catalogue, user state with fid/qkey reconciliation,
   composition/grading/Star lifecycle, Lookup, the JSON API, export/import, the server with path
   containment and the token gate, the CLI, and the four pages, ending with a desktop smoke run and a
@@ -246,7 +264,7 @@ defects surfaced; three needed new decisions, and the ground truth itself was wr
   keep a diffable JSON copy of user state committed beside the binary `tutor.db`, turning git's
   inability to merge SQLite from "pick a side and discard the other device's attempts" into a real
   merge, and DB loss from total to recoverable.
-- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Client render cost is now **measured,
+- `docs/spec/2026-08-13-wens-tutor.md`: Client render cost is now **measured,
   not assumed** — headless Chromium with vendored markdown-it renders the largest file (292 KB,
   1330 blocks, 3777 DOM nodes) in 82 ms cold / 26 ms warm, and restoring 200 annotations by naive
   scan costs 18 ms, so chunked rendering, TOC virtualisation, `content-visibility` and any anchor
@@ -278,7 +296,7 @@ defects surfaced; three needed new decisions, and the ground truth itself was wr
 - `skills/wens-tutor/CONTEXT.md`: Course and Bank redefined as regions; new term Material File;
   Annotation widened to any Material File; Progress pinned to leaf sections; Lookup widened to
   cover banks as well as courses; Attempt gains resumability and wall-clock semantics.
-- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Rewritten again for the second round.
+- `docs/spec/2026-08-13-wens-tutor.md`: Rewritten again for the second round.
   Corpus is now **270 questions in 11 banks**. Adds the second question shape and its parser
   tolerances, resumable attempts with a wall-clock countdown and auto-submit, the statistics page
   (five panels ordered score → pace → most-missed → per-bank → star/defect trend), dual-tab
@@ -300,7 +318,7 @@ defects surfaced; three needed new decisions, and the ground truth itself was wr
   history; device-local root registry instead of an absolute path committed inside a synced
   repo; defective questions detected and excluded from papers by default; explanations as
   attributed content in the bank file, notes as user state.
-- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: Rewritten against eight decisions
+- `docs/spec/2026-08-13-wens-tutor.md`: Rewritten against eight decisions
   from the grilling session. New ground-truth measurements: strict bank detection is required
   (the loose `### 第` pattern misclassifies 58 cheatsheet chapter headings as questions),
   stems contain fenced code so the option scanner must skip fenced regions, and **23 of 200
@@ -313,7 +331,7 @@ defects surfaced; three needed new decisions, and the ground truth itself was wr
 
 ### 2026-08-13 — docs(wens-tutor): design spec for courseware review skill + site
 
-- `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`: New design for `wens-tutor`, a
+- `docs/spec/2026-08-13-wens-tutor.md`: New design for `wens-tutor`, a
   skill that indexes a Markdown courseware root into a SQLite metadata DB and serves a
   dynamically generated study site (portal, reader with persistent highlights/notes, mock
   exam with per-attempt statistics, starred-question drilling, selection-driven lookup from
@@ -336,7 +354,7 @@ defects surfaced; three needed new decisions, and the ground truth itself was wr
   always draft-then-confirm — never an auto-write fast path), and read-only cross-note
   query/synthesis (scoped search, cited answers). `references/vault-rules.md` is a
   pre-write self-check checklist. Design at
-  `docs/superpowers/specs/2026-08-07-wenswiki-notes-design.md`.
+  `docs/spec/2026-08-07-wenswiki-notes.md`.
 
 ### 2026-07-30 — refactor(publishing-platform-stores): grill and sharpen domain vocabulary
 
@@ -395,7 +413,7 @@ defects surfaced; three needed new decisions, and the ground truth itself was wr
 
 ### 2026-05-10 — feat(dispatch-agent): Rust crate scaffold and cli-templates.toml rewrite
 
-- `skills/dispatch-agent/rust/`: New Rust crate for the dispatch-agent binary rewrite (PR 1, layer a). Implements `types.rs`, `fsutil.rs`, `config.rs`, `templates.rs` with full unit tests. Python scripts remain the active entry point; Rust source is dark in production (see docs/plans/2026-05-10-dispatch-agent-rust-rewrite.md for rollout plan).
+- `skills/dispatch-agent/rust/`: New Rust crate for the dispatch-agent binary rewrite (PR 1, layer a). Implements `types.rs`, `fsutil.rs`, `config.rs`, `templates.rs` with full unit tests. Python scripts remain the active entry point; Rust source is dark in production (see docs/plan/2026-05-10-dispatch-agent-rust-rewrite.md for rollout plan).
 - `skills/dispatch-agent/data/cli-templates.toml`: Rewritten as a fully-commented field reference document.
 
 ### 2026-05-08 — feat(dispatch-agent): add type=source env entries for shell env file sourcing

@@ -1,4 +1,5 @@
 # yt-channel-dl Implementation Plan
+Status: Shipped (2026-04-27)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +9,7 @@
 
 **Tech Stack:** Python 3 (stdlib), yt-dlp library, ffmpeg (optional, for MP3 conversion)
 
-**Spec:** `docs/superpowers/specs/2026-04-27-yt-channel-dl-design.md`
+**Spec:** `docs/spec/2026-04-27-yt-channel-dl.md`
 
 ---
 

@@ -1,4 +1,5 @@
 # dispatch-agent — Rust Rewrite Plan
+Status: Shipped (2026-05-10)
 
 **Date:** 2026-05-10
 **Scope:** Replace the three Python scripts (`detect.py`, `init.py`, `dispatch.py`) with a single Rust binary exposing them as subcommands, plus a new `config` subcommand. Annotate `data/cli-templates.toml` so it doubles as user-facing reference.
@@ -701,4 +702,4 @@ Each layer is independently testable and reviewable.
 - Python scripts and existing Python tests still pass (no regression).
 - `CHANGELOG.md` has an `Unreleased` entry summarising the Rust port.
 - `references/dispatch-guide.md` updated with the §5.1 annotated config example.
-- Plan committed under `docs/plans/`.
+- Plan committed under `docs/plan/`.

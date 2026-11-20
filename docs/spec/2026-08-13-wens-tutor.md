@@ -1,7 +1,8 @@
 # wens-tutor skill — design
+Status: Shipped (2026-08-13)
 
-Domain vocabulary: [`skills/wens-tutor/CONTEXT.md`](../../../skills/wens-tutor/CONTEXT.md).
-Decisions: [`skills/wens-tutor/docs/adr/`](../../../skills/wens-tutor/docs/adr/) (0001–0010).
+Domain vocabulary: [`skills/wens-tutor/CONTEXT.md`](../../skills/wens-tutor/CONTEXT.md).
+Decisions: [`skills/wens-tutor/docs/adr/`](../../skills/wens-tutor/docs/adr/) (0001–0010).
 Terms defined there — Materials Root, Subject, Material File, Course, Bank, Section, Question,
 Defect, Paper, Attempt, Drill, Star, Annotation, Orphan, Progress, Lookup, Backfill,
 Explanation — are used here with exactly those meanings.

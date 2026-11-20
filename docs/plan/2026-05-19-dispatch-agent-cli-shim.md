@@ -1,4 +1,5 @@
 # dispatch-agent skill CLI shim refactor — Implementation Plan
+Status: Shipped (2026-05-19)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +9,7 @@
 
 **Tech Stack:** Markdown only. Skill runtime is Bash, Read, Write, AskUserQuestion (per SKILL.md frontmatter). No new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-05-19-dispatch-agent-cli-shim-design.md` (v6).
+**Spec:** `docs/spec/2026-05-19-dispatch-agent-cli-shim.md` (v6).
 
 ---
 

@@ -1,4 +1,5 @@
 # wenswiki-notes skill — design
+Status: Shipped (2026-08-07)
 
 ## Problem
 

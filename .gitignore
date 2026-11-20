@@ -2,7 +2,7 @@
 
 __pycache__
 
-docs/tmp/
+docs/tmp/*-scratch/
 
 .superpowers/
 .worktrees/

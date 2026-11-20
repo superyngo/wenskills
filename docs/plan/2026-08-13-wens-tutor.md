@@ -1,4 +1,5 @@
 # wens-tutor Implementation Plan
+Status: Shipped (2026-08-13)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +9,7 @@
 
 **Tech Stack:** Python ≥3.9 stdlib only (`http.server`, `sqlite3`, `hashlib`, `unicodedata`, `hmac`, `json`, `argparse`, `re`); vanilla ES modules; vendored `markdown-it` (single file, no npm, no build); `unittest` for tests.
 
-**Design authority:** `docs/superpowers/specs/2026-08-13-wens-tutor-design.md`. Domain vocabulary: `skills/wens-tutor/CONTEXT.md`. Decisions: `skills/wens-tutor/docs/adr/0001…0013` — read 0001, 0002, 0006, 0007 before Task 1; **0011 and 0012 before Task 2**; 0004 and 0005 before Task 3; 0002 again before Task 5 (the Slot record); **0013 before Task 8**; 0009 before Task 9; 0010 before Task 12.
+**Design authority:** `docs/spec/2026-08-13-wens-tutor.md`. Domain vocabulary: `skills/wens-tutor/CONTEXT.md`. Decisions: `skills/wens-tutor/docs/adr/0001…0013` — read 0001, 0002, 0006, 0007 before Task 1; **0011 and 0012 before Task 2**; 0004 and 0005 before Task 3; 0002 again before Task 5 (the Slot record); **0013 before Task 8**; 0009 before Task 9; 0010 before Task 12.
 
 ## Global Constraints
 

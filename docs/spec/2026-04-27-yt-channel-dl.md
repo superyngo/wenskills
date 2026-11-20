@@ -1,7 +1,7 @@
 # yt-channel-dl Skill Design
+Status: Shipped (2026-04-27)
 
 **Date:** 2026-04-27  
-**Status:** Approved
 
 ---
 

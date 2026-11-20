@@ -1,7 +1,7 @@
 # dispatch-agent skill — CLI shim refactor
+Status: Shipped (2026-05-19)
 
 Date: 2026-05-19
-Status: Approved (brainstorming, v6 — minor fills from round-4 review; ready for writing-plans)
 
 ## Goal
 

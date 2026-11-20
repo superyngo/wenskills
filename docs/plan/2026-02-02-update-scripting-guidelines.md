@@ -1,4 +1,5 @@
 # Update Scripting Guidelines Implementation Plan
+Status: Shipped (2026-02-15)
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 

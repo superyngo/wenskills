@@ -1,4 +1,5 @@
 # Session Handoff: dispatch-agent Rust Rewrite — Layer (c)
+Status: Shipped (2026-05-10)
 
 **Date:** 2026-05-10
 **Status:** PR 1 layers (a) and (b) complete. Layer (c) is next.
@@ -36,7 +37,7 @@ Implement in this order (respects dependency DAG):
 | 9 | `tests/bin/fake_agent.rs` | integration harness |
 | 10 | Integration tests + fixtures | fake_agent, insta snapshots |
 
-Full spec: `docs/plans/2026-05-10-dispatch-agent-rust-rewrite.md`
+Full spec: `docs/plan/2026-05-10-dispatch-agent-rust-rewrite.md`
 
 ---
 
@@ -84,7 +85,7 @@ Spec review must pass before quality review starts. Never skip either.
 
 ## Spec excerpts for layer (c)
 
-(Full spec in `docs/plans/2026-05-10-dispatch-agent-rust-rewrite.md`)
+(Full spec in `docs/plan/2026-05-10-dispatch-agent-rust-rewrite.md`)
 
 ### env.rs (§2.2, §6 env injection)
 
@@ -323,7 +324,7 @@ cargo test --bin dispatch-agent 2>&1 | tail -3
 cargo clippy -- -D warnings 2>&1 | tail -2
 
 # Reference the full plan
-cat docs/plans/2026-05-10-dispatch-agent-rust-rewrite.md
+cat docs/plan/2026-05-10-dispatch-agent-rust-rewrite.md
 
 # Test dispatch works
 cd /Volumes/Home/Users/wen/.claude/skills/dispatch-agent

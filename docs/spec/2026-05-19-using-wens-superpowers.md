@@ -1,8 +1,8 @@
 # using-wens-superpowers — Design Spec
+Status: Superseded by ../../skills/wens-plan-creator/SKILL.md
 
 **Date:** 2026-05-19
 **Author:** wen (superyngo@gmail.com)
-**Status:** Draft
 
 ## 1. Purpose
 

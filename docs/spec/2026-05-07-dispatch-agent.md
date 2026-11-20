@@ -1,4 +1,5 @@
 # dispatch-agent Skill — Design Spec
+Status: Shipped (2026-05-07)
 
 **Date:** 2026-05-07  
 **Revised:** 2026-05-07 (v7 — final)

@@ -1,4 +1,5 @@
 # wenswiki-notes Skill Implementation Plan
+Status: Shipped (2026-08-07)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -10,7 +11,7 @@
 
 ## Global Constraints
 
-Copied verbatim from `docs/superpowers/specs/2026-08-07-wenswiki-notes-design.md`:
+Copied verbatim from `docs/spec/2026-08-07-wenswiki-notes.md`:
 
 - Skill lives in `skills/wenswiki-notes/`, always targets `~/repos/wenswiki/wenswiki` (governed by `~/repos/wenswiki/CLAUDE.md`) — not a general-purpose vault tool.
 - Never auto-write outside `inbox/` without an explicit user confirmation of a shown draft (non-negotiable — user's explicit choice).
@@ -609,7 +610,7 @@ above the existing newest entry, matching the file's established format:
   always draft-then-confirm — never an auto-write fast path), and read-only cross-note
   query/synthesis (scoped search, cited answers). `references/vault-rules.md` is a
   pre-write self-check checklist. Design at
-  `docs/superpowers/specs/2026-08-07-wenswiki-notes-design.md`.
+  `docs/spec/2026-08-07-wenswiki-notes.md`.
 ```
 
 - [ ] **Step 3: Final commit**
